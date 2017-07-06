@@ -7,5 +7,11 @@ authors = ["Dylan McKay <me@dylanmckay.io>"]
 name = "avrlit"
 path = "src/avrlit/main.rs"
 
+[[bin]]
+name = "avrsim"
+path = "src/avrsim/main.rs"
+
 [dependencies]
 lit = "0.2.2"
+simavr-sys = { path = "../simavr-sys" }
+
