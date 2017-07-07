@@ -1,3 +1,8 @@
+pub use self::firmware::Firmware;
+
+pub mod pty;
+mod firmware;
+
 use simavr;
 
 use std::ffi::{CString, CStr};
@@ -18,7 +23,7 @@ impl Avr {
             return Err("could not create avr sim");
         }
 
-        unsafe { simavr::avr_init(avr) ; }
+        unsafe { simavr::avr_init(avr); }
 
         Ok(Avr {
             avr: avr,
@@ -32,26 +37,35 @@ impl Avr {
         }
     }
 
+    /// Loads a firmware.
+    pub fn load(&mut self, firmware: &Firmware) {
+        unsafe {
+            simavr::avr_load_firmware(self.avr,
+                                      // This parameter is probably missing a 'const' qualifier
+                                      firmware.raw() as *const _ as *mut _)
+        }
+    }
+
     /// Gets the name of the mcu.
     pub fn name(&self) -> &str {
-        let name = unsafe { CStr::from_ptr(self.avr().mmcu) };
+        let name = unsafe { CStr::from_ptr(self.raw().mmcu) };
         name.to_str().expect("mcu name is not valid utf-8")
     }
 
     /// Gets the frequency of the mcu.
     pub fn frequency(&self) -> u32 {
-        self.avr().frequency
+        self.raw().frequency
     }
 
     /// Sets the frequency of the mcu.
     pub fn set_frequency(&mut self, freq: u32) {
-        self.avr_mut().frequency = freq;
+        self.raw_mut().frequency = freq;
     }
 
     /// Gets a reference to the underlying `avr_t` structure.
-    fn avr(&self) -> &simavr::avr_t { unsafe { &*self.avr } }
+    pub fn raw(&self) -> &simavr::avr_t { unsafe { &*self.avr } }
     /// Gets a mutable reference to the underlying `avr_t` structure.
-    fn avr_mut(&self) -> &mut simavr::avr_t { unsafe { &mut *self.avr } }
+    pub fn raw_mut(&mut self) -> &mut simavr::avr_t { unsafe { &mut *self.avr } }
 }
 
 #[cfg(test)]

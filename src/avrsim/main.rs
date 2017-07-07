@@ -4,5 +4,8 @@ extern crate simavr_sys as simavr;
 pub mod sim;
 
 fn main() {
-    let _avr = sim::Avr::with_name("atmega328p").unwrap();
+    let mut avr = sim::Avr::with_name("atmega328p").unwrap();
+    let firmware = sim::Firmware::read_elf("arduino-uart-loop.elf").unwrap();
+
+    avr.load(&firmware);
 }
