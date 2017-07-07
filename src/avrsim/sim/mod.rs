@@ -42,6 +42,8 @@ impl Avr {
 
         let mut avr = Avr { avr: avr };
         avr.set_frequency(16_000_000);
+        // Enable trace.
+        avr.raw_mut().set_log(simavr::LOG_WARNING as _);
         avr
     }
 

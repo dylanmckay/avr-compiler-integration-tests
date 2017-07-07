@@ -3,7 +3,7 @@ name = "avrtest"
 version = "0.1.0"
 dependencies = [
  "lit 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "simavr-sys 1.5.0",
+ "simavr-sys 1.5.1",
 ]
 
 [[package]]
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "simavr-sys"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "bindgen 0.26.3 (git+https://github.com/dylanmckay/rust-bindgen.git?branch=preprocess-doc-comments)",
  "walkdir 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
