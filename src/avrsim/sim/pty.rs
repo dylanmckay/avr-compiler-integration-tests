@@ -22,6 +22,14 @@ fn uart(name: char) -> u32 {
     ioctl('u' as u8, 'a' as u8, 'r' as u8, name as u8)
 }
 
+fn uart_get_flags(name: char) -> u32 {
+    ioctl('u' as u8, 'a' as u8, 'g' as u8, name as u8)
+}
+
+fn uart_set_flags(name: char) -> u32 {
+    ioctl('u' as u8, 'a' as u8, 's' as u8, name as u8)
+}
+
 /// The names of the IRQs we want to attach to.
 const IRQ_NAMES: &'static [&'static str] = &[
     "8<uart_pty.in", // Must be first
@@ -39,7 +47,6 @@ pub fn attach(avr: &mut Avr) {
 
     let mut irq_names: Vec<_> = irq_names.iter().map(|irq| irq.as_ptr()).collect();
 
-
     unsafe {
         let irq = simavr::avr_alloc_irq(&mut avr.raw_mut().irq_pool, 0,
             irq_names.len() as u32, irq_names.as_mut_ptr());
@@ -49,6 +56,12 @@ pub fn attach(avr: &mut Avr) {
 
         let uart_name = '0';
         let uart = uart(uart_name);
+
+        // Disable dumping of stdout.
+        let mut stdio_flag: u32 = 0;
+        simavr::avr_ioctl(avr.underlying(), uart_get_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
+        stdio_flag &= !(simavr::AVR_UART_FLAG_STDIO as u32);
+        simavr::avr_ioctl(avr.underlying(), uart_set_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
 
         let src = simavr::avr_io_getirq(avr.raw_mut() as *mut _, uart, simavr::UART_IRQ_OUTPUT as _);
         let dst = simavr::avr_io_getirq(avr.raw_mut() as *mut _, uart, simavr::UART_IRQ_INPUT as _);
@@ -62,5 +75,5 @@ pub fn attach(avr: &mut Avr) {
 unsafe extern "C" fn irq_input_hook(_irq: *mut simavr::avr_irq_t,
                                     value: u32,
                                     _param: *mut c_void) {
-    println!("received data: '{}'", value);
+    print!("{}", value as u8 as char);
 }

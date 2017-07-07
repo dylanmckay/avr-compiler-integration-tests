@@ -38,12 +38,13 @@ pub enum State {
 
 impl Avr {
     pub unsafe fn from_raw(avr: *mut simavr::avr_t) -> Self {
-        simavr::avr_init(avr);
 
         let mut avr = Avr { avr: avr };
         avr.set_frequency(16_000_000);
         // Enable trace.
-        avr.raw_mut().set_log(simavr::LOG_WARNING as _);
+        // avr.raw_mut().set_log(simavr::LOG_WARNING as _);
+
+        simavr::avr_init(avr.avr);
         avr
     }
 
@@ -96,6 +97,10 @@ impl Avr {
     /// Sets the frequency of the mcu.
     pub fn set_frequency(&mut self, freq: u32) {
         self.raw_mut().frequency = freq;
+    }
+
+    pub unsafe fn underlying(&mut self) -> *mut simavr::avr_t {
+        self.avr
     }
 
     /// Gets a reference to the underlying `avr_t` structure.

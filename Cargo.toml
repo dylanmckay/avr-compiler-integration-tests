@@ -13,5 +13,5 @@ path = "src/avrsim/main.rs"
 
 [dependencies]
 lit = "0.2.2"
-simavr-sys = { path = "../simavr-sys", features = ["trace"] }
+simavr-sys = { path = "../simavr-sys", features = [] }
 
