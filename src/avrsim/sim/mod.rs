@@ -5,6 +5,7 @@ mod firmware;
 
 use simavr;
 
+use std::os::raw::c_int;
 use std::ffi::{CString, CStr};
 use std::ptr;
 
@@ -13,7 +14,37 @@ pub struct Avr {
     avr: *mut simavr::avr_t,
 }
 
+/// The state of a simulated AVR.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum State {
+    /// Before initialization is finished.
+    Limbo = 0,
+    /// All is stopped, timers included.
+    Stopped,
+    /// Running freely.
+    Running,
+    /// We're sleeping until an interrupt.
+    Sleeping,
+    /// Run ONE instruction.
+    Step,
+    /// Tell gdb it's all OK, and give it registers.
+    StepDone,
+    /// AVR simulation stopped gracefully.
+    Done,
+    /// AVR simulation crashed (watchdog fired).
+    Crashed,
+}
+
 impl Avr {
+    pub unsafe fn from_raw(avr: *mut simavr::avr_t) -> Self {
+        simavr::avr_init(avr);
+
+        let mut avr = Avr { avr: avr };
+        avr.set_frequency(16_000_000);
+        avr
+    }
+
     /// Creates a new avr instance.
     pub fn with_name(name: &str) -> Result<Self, &'static str> {
         let name = CString::new(name).unwrap();
@@ -23,11 +54,7 @@ impl Avr {
             return Err("could not create avr sim");
         }
 
-        unsafe { simavr::avr_init(avr); }
-
-        Ok(Avr {
-            avr: avr,
-        })
+        Ok(unsafe { Avr::from_raw(avr) })
     }
 
     /// Resets the mcu.
@@ -44,6 +71,13 @@ impl Avr {
                                       // This parameter is probably missing a 'const' qualifier
                                       firmware.raw() as *const _ as *mut _)
         }
+    }
+
+    /// Runs a single cycle.
+    pub fn run_cycle(&mut self) -> State {
+        unsafe {
+            simavr::avr_run(self.avr)
+        }.into()
     }
 
     /// Gets the name of the mcu.
@@ -66,6 +100,39 @@ impl Avr {
     pub fn raw(&self) -> &simavr::avr_t { unsafe { &*self.avr } }
     /// Gets a mutable reference to the underlying `avr_t` structure.
     pub fn raw_mut(&mut self) -> &mut simavr::avr_t { unsafe { &mut *self.avr } }
+}
+
+impl State {
+    /// Checks if the state represents a running simulation, regardless
+    /// of success of failure.
+    pub fn is_running(&self) -> bool {
+        match *self {
+            State::Limbo => true,
+            State::Stopped => false,
+            State::Running => true,
+            State::Sleeping => true,
+            State::Step => true,
+            State::StepDone => true,
+            State::Done => false,
+            State::Crashed => false,
+        }
+    }
+}
+
+impl From<c_int> for State {
+    fn from(v: c_int) -> Self {
+        match v {
+            0 => State::Limbo,
+            1 => State::Stopped,
+            2 => State::Running,
+            3 => State::Sleeping,
+            4 => State::Step,
+            5 => State::StepDone,
+            6 => State::Done,
+            7 => State::Crashed,
+            _ => panic!("unknown state discriminator: {}", v),
+        }
+    }
 }
 
 #[cfg(test)]

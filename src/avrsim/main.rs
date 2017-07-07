@@ -8,4 +8,14 @@ fn main() {
     let firmware = sim::Firmware::read_elf("arduino-uart-loop.elf").unwrap();
 
     avr.load(&firmware);
+
+    sim::pty::attach(&mut avr);
+
+    loop {
+        match avr.run_cycle() {
+            sim::State::Running => (),
+            state if !state.is_running() => break,
+            state => println!("{:?}", state),
+        }
+    }
 }
