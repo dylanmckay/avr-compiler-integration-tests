@@ -1,6 +1,6 @@
 pub use self::firmware::Firmware;
 
-pub mod pty;
+pub mod uart;
 mod firmware;
 
 use simavr;

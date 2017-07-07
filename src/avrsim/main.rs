@@ -9,7 +9,7 @@ fn main() {
 
     avr.load(&firmware);
 
-    sim::pty::attach(&mut avr);
+    sim::uart::attach(&mut avr);
 
     loop {
         match avr.run_cycle() {
