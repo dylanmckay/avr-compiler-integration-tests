@@ -1,4 +1,6 @@
 extern crate simavr_sys as simavr;
+#[macro_use]
+extern crate bitflags;
 
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;
@@ -12,11 +14,13 @@ fn main() {
     // let firmware = sim::Firmware::read_elf("arduino-uart-loop.elf").unwrap();
     let firmware = sim::Firmware::read_elf("arduino-uart-single.elf").unwrap();
 
-    avr.load(&firmware);
+    println!("firmware: {:?}", firmware.raw().flashbase);
 
+    avr.flash(&firmware);
     sim::uart::attach_to_stdout(&mut avr);
 
     loop {
+        println!("pc: {}", avr.raw().pc);
         match avr.run_cycle() {
             sim::State::Running => (),
             sim::State::Crashed => {

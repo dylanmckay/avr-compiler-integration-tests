@@ -33,10 +33,10 @@ pub fn attach_to_stdout(avr: &mut Avr) {
         let uart = ioctl::uart(uart_name);
 
         // Disable dumping of stdout.
-        let mut stdio_flag: u32 = 0;
-        simavr::avr_ioctl(avr.underlying(), ioctl::uart_get_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
-        stdio_flag &= !(simavr::AVR_UART_FLAG_STDIO as u32);
-        simavr::avr_ioctl(avr.underlying(), ioctl::uart_set_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
+        // let mut stdio_flag: u32 = 0;
+        // simavr::avr_ioctl(avr.underlying(), ioctl::uart_get_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
+        // stdio_flag &= !(simavr::AVR_UART_FLAG_STDIO as u32);
+        // simavr::avr_ioctl(avr.underlying(), ioctl::uart_set_flags(uart_name), &mut stdio_flag as *mut u32 as *mut _);
 
         let src = simavr::avr_io_getirq(avr.raw_mut() as *mut _, uart, simavr::UART_IRQ_OUTPUT as _);
         let dst = simavr::avr_io_getirq(avr.raw_mut() as *mut _, uart, simavr::UART_IRQ_INPUT as _);

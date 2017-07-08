@@ -2,6 +2,7 @@
 name = "avrtest"
 version = "0.1.0"
 dependencies = [
+ "bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lit 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "simavr-sys 1.5.1",
 ]

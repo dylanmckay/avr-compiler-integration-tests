@@ -1,8 +1,8 @@
-pub use self::firmware::Firmware;
+pub use self::flashable::{Flashable, Firmware};
 
 pub mod uart;
 pub mod ioctl;
-mod firmware;
+mod flashable;
 
 use simavr;
 
@@ -13,8 +13,10 @@ use std::ptr;
 
 /// An AVR instance.
 pub struct Avr {
+    /// The underlying ffi type.
     avr: *mut simavr::avr_t,
-    is_initialised: bool,
+    /// The current state.
+    current_state: State,
 }
 
 /// The status of an AVR mcu.
@@ -49,14 +51,41 @@ pub enum State {
     Crashed,
 }
 
+bitflags! {
+    pub struct StatusRegister: u8 {
+        /// The interrupt flag (`I`).
+        const INTERRUPT_FLAG = 0b10000000;
+        /// The transfer bit used by `bld` and `bst` instructions (`T`).
+        const TRANSFER_FLAG = 0b01000000;
+        /// The half-carry flag (`H`).
+        const HALF_CARRY_FLAG = 0b00100000;
+        /// The sign flag equal to (`N xor V`) (`S`).
+        const SIGN_FLAG = 0b00010000;
+        /// The signed overflow flag (`V`)
+        const SIGNED_OVERFLOW_FLAG = 0b00001000;
+        /// The negative flag (`N`).
+        const NEGATIVE_FLAG = 0b00000100;
+        /// The zero flag (`Z`).
+        const ZERO_FLAG = 0b00000010;
+        /// The carry flag (`C`).
+        const CARRY_FLAG = 0b00000001;
+    }
+}
+
 impl Avr {
     pub unsafe fn from_raw(avr: *mut simavr::avr_t) -> Self {
-        let mut avr = Avr { avr: avr, is_initialised: false };
+        let mut avr = Avr {
+            avr: avr,
+            current_state: State::initial(),
+        };
 
-        // avr.raw_mut().set_log(simavr::LOG_WARNING as _);
+        avr.raw_mut().set_log(simavr::LOG_TRACE as _);
+        // avr.raw_mut().set_trace(10);
 
         util::set_mcu_status(Status::default(), avr.avr);
         avr.raw_mut().reset = Some(util::on_reset);
+
+        simavr::avr_init(avr.avr);
 
         avr.set_frequency(16_000_000);
         avr
@@ -88,30 +117,41 @@ impl Avr {
         }
     }
 
-    /// Loads a firmware.
-    pub fn load(&mut self, firmware: &Firmware) {
-        unsafe {
-            simavr::avr_load_firmware(self.avr,
-                                      // This parameter is probably missing a 'const' qualifier
-                                      firmware.raw() as *const _ as *mut _)
-        }
+    /// Flashes something to the microcontroller.
+    pub fn flash<F>(&mut self, flashable: &F)
+        where F: Flashable + ?Sized {
+        flashable.flash(self)
     }
 
     /// Runs a single cycle.
     pub fn run_cycle(&mut self) -> State {
-        unsafe {
-            if !self.is_initialised {
-                simavr::avr_init(self.avr);
-                self.is_initialised = true;
-            }
-
+        self.current_state = unsafe {
             simavr::avr_run(self.avr)
-        }.into()
+        }.into();
+
+        self.current_state
+    }
+
+    /// Gets the status of the microcontroller.
+    pub fn status(&self) -> &Status {
+        unsafe { util::get_mcu_status(self.avr) }
+    }
+
+    /// Gets the status register value.
+    pub fn status_register(&self) -> StatusRegister {
+        println!("sreg: {:?}", self.raw().sreg);
+        unimplemented!();
+        // StatusRegister::from_bits(0).unwrap()
+        // StatusRegister::from_bits(self.raw().sreg).unwrap()
     }
 
     /// Gets the state of the microcontroller.
-    pub fn status(&self) -> &Status {
-        unsafe { util::get_mcu_status(self.avr) }
+    pub fn state(&self) -> &State {
+        &self.current_state
+    }
+
+    pub fn indefinitely_halted(&self) -> bool {
+        unimplemented!();
     }
 
     /// Gets the name of the mcu.
@@ -149,6 +189,9 @@ impl Status {
 }
 
 impl State {
+    /// The very first initial state.
+    pub fn initial() -> Self { State::Limbo }
+
     /// Checks if the state represents a running simulation, regardless
     /// of success of failure.
     pub fn is_running(&self) -> bool {
@@ -167,18 +210,18 @@ impl State {
 
 impl Drop for Avr {
     fn drop(&mut self) {
-        let mcu_state: Box<Status> = unsafe {
+        let status: Box<Status> = unsafe {
             Box::from_raw(self.raw().data as *mut Status)
         };
 
-        drop(mcu_state)
+        drop(status)
     }
 }
 
 impl Default for Status {
     fn default() -> Status {
         Status {
-            powered_on: false,
+            powered_on: true,
             reset_count: 0,
         }
     }
@@ -264,10 +307,8 @@ mod test {
     fn first_initialise_increments_reset_count() {
         let mut avr = atmega328();
 
-        assert_eq!(avr.status().powered_on, false);
         assert_eq!(avr.status().reset_count, 0);
         avr.run_cycle();
-        assert_eq!(avr.status().powered_on, true);
         assert_eq!(avr.status().reset_count, 0);
     }
 
@@ -275,21 +316,17 @@ mod test {
     fn explicit_resets_after_first_increment_reset_count() {
         let mut avr = atmega328();
 
-        assert_eq!(avr.status().powered_on, false);
         assert_eq!(avr.status().reset_count, 0);
 
         // Run a few cycles to for good measure.
         for _ in 0..4 {
             avr.run_cycle();
-            assert_eq!(avr.status().powered_on, true);
             assert_eq!(avr.status().reset_count, 0);
         }
 
         avr.reset();
-        assert_eq!(avr.status().powered_on, true);
         assert_eq!(avr.status().reset_count, 1);
         avr.reset();
-        assert_eq!(avr.status().powered_on, true);
         assert_eq!(avr.status().reset_count, 2);
     }
 
@@ -307,4 +344,26 @@ mod test {
         avr.reset();
         assert_eq!(avr.status().has_reset(), true);
     }
+
+    #[test]
+    fn initial_state_matches_expected() {
+        let avr = atmega328();
+        assert_eq!(avr.state(), &State::initial());
+    }
+
+    #[test]
+    fn state_is_running_after_first_cycle() {
+        let mut avr = atmega328();
+        avr.run_cycle();
+        assert_eq!(avr.state(), &State::Running);
+    }
+
+    // #[test]
+    // fn status_register_makes_sense() {
+    //     let mut avr = atmega328();
+    //     // assert_eq!(avr.status_register(), StatusRegister::empty());
+    //     avr.flash(&[0b1001_0100, 0b_0111_1000]);
+    //     avr.run_cycle();
+    //     assert_eq!(avr.status_register(), StatusRegister::empty());
+    // }
 }
