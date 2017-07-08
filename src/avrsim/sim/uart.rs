@@ -14,11 +14,8 @@ const IRQ_NAMES: &'static [&'static str] = &[
     "8>uart_pty.out",
 ];
 
-pub struct Pty {
-}
-
 /// Attaches.
-pub fn attach(avr: &mut Avr) {
+pub fn attach_to_stdout(avr: &mut Avr) {
     let irq_names: Vec<_> = IRQ_NAMES.iter()
                                       .map(|&irq| CString::new(irq).unwrap())
                                       .collect();
