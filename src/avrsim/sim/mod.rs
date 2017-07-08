@@ -17,10 +17,10 @@ pub struct Avr {
     is_initialised: bool,
 }
 
-/// The state of an AVR mcu.
+/// The status of an AVR mcu.
 /// Callbacks will update this structure.
 #[derive(Debug, PartialEq, Eq)]
-pub struct McuState {
+pub struct Status {
     /// Whether we have done the very first initial reset.
     powered_on: bool,
     /// The number of times the AVR has reset.
@@ -55,8 +55,7 @@ impl Avr {
 
         // avr.raw_mut().set_log(simavr::LOG_WARNING as _);
 
-        let mcu_state = Box::new(McuState::default());
-        avr.raw_mut().data = Box::into_raw(mcu_state) as *mut u8;
+        util::set_mcu_status(Status::default(), avr.avr);
         avr.raw_mut().reset = Some(util::on_reset);
 
         avr.set_frequency(16_000_000);
@@ -111,8 +110,8 @@ impl Avr {
     }
 
     /// Gets the state of the microcontroller.
-    pub fn state(&self) -> &McuState {
-        unsafe { util::mcu_state(self.avr) }
+    pub fn status(&self) -> &Status {
+        unsafe { util::get_mcu_status(self.avr) }
     }
 
     /// Gets the name of the mcu.
@@ -141,12 +140,12 @@ impl Avr {
     pub fn raw_mut(&mut self) -> &mut simavr::avr_t { unsafe { &mut *self.avr } }
 }
 
-impl McuState {
+impl Status {
     /// Whether the microcontroller has been reset *after* it was first started.
     ///
     /// This will ignore the initial reset signal on startup, only considering
     /// resets after startup.
-    fn has_reset(&self) -> bool { self.reset_count > 0 }
+    pub fn has_reset(&self) -> bool { self.reset_count > 0 }
 }
 
 impl State {
@@ -168,17 +167,17 @@ impl State {
 
 impl Drop for Avr {
     fn drop(&mut self) {
-        let mcu_state: Box<McuState> = unsafe {
-            Box::from_raw(self.raw().data as *mut McuState)
+        let mcu_state: Box<Status> = unsafe {
+            Box::from_raw(self.raw().data as *mut Status)
         };
 
         drop(mcu_state)
     }
 }
 
-impl Default for McuState {
-    fn default() -> McuState {
-        McuState {
+impl Default for Status {
+    fn default() -> Status {
+        Status {
             powered_on: false,
             reset_count: 0,
         }
@@ -207,31 +206,37 @@ mod util {
 
     /// Hook that runs when the mcu receives a reset signal.
     pub unsafe extern fn on_reset(avr: *mut simavr::avr_t) {
-        let mcu_state = self::mcu_state(avr);
+        let mcu_status = self::get_mcu_status(avr);
 
         // Check if this is the very first initial reset signal on startup.
-        if !mcu_state.powered_on {
-            mcu_state.powered_on = true;
+        if !mcu_status.powered_on {
+            mcu_status.powered_on = true;
         } else {
             // A standard reset.
-            mcu_state.reset_count += 1;
+            mcu_status.reset_count += 1;
         }
     }
 
-    /// Gets the `McuState` that is stored inside the custom data field on an `avr_t`.
-    pub unsafe fn mcu_state<'a>(avr: *mut simavr::avr_t) -> &'a mut McuState {
-        let ptr = (*avr).data;
-        println!("found state at {}", ptr as usize);
-        let mut boxed: Box<McuState> = Box::from_raw(ptr as *mut McuState);
+    /// Associates a status with a microcontroller.
+    pub unsafe fn set_mcu_status(status: Status, avr: *mut simavr::avr_t) {
+        let mcu_status = Box::new(status);
+        (*avr).data = Box::into_raw(mcu_status) as *mut u8;
+    }
 
-        let state: &'a mut McuState = mem::transmute(boxed.as_mut());
+    /// Gets the `Status` that is stored inside the custom data field on an `avr_t`.
+    pub unsafe fn get_mcu_status<'a>(avr: *mut simavr::avr_t) -> &'a mut Status {
+        let ptr = (*avr).data;
+        println!("found status at {}", ptr as usize);
+        let mut boxed: Box<Status> = Box::from_raw(ptr as *mut Status);
+
+        let status: &'a mut Status = mem::transmute(boxed.as_mut());
 
         // Forget the box without running the destructors.
         // We only needed to build the box in order to get the underlying
         // reference. The box itself will be freed upon destruction of
         // the `Avr` object.
         mem::forget(boxed);
-        state
+        status
     }
 }
 
@@ -250,56 +255,56 @@ mod test {
     }
 
     #[test]
-    fn new_mcu_state_is_default() {
+    fn new_mcu_status_is_default() {
         let avr = atmega328();
-        assert_eq!(avr.state(), &McuState::default());
+        assert_eq!(avr.status(), &Status::default());
     }
 
     #[test]
     fn first_initialise_increments_reset_count() {
         let mut avr = atmega328();
 
-        assert_eq!(avr.state().powered_on, false);
-        assert_eq!(avr.state().reset_count, 0);
+        assert_eq!(avr.status().powered_on, false);
+        assert_eq!(avr.status().reset_count, 0);
         avr.run_cycle();
-        assert_eq!(avr.state().powered_on, true);
-        assert_eq!(avr.state().reset_count, 0);
+        assert_eq!(avr.status().powered_on, true);
+        assert_eq!(avr.status().reset_count, 0);
     }
 
     #[test]
     fn explicit_resets_after_first_increment_reset_count() {
         let mut avr = atmega328();
 
-        assert_eq!(avr.state().powered_on, false);
-        assert_eq!(avr.state().reset_count, 0);
+        assert_eq!(avr.status().powered_on, false);
+        assert_eq!(avr.status().reset_count, 0);
 
         // Run a few cycles to for good measure.
         for _ in 0..4 {
             avr.run_cycle();
-            assert_eq!(avr.state().powered_on, true);
-            assert_eq!(avr.state().reset_count, 0);
+            assert_eq!(avr.status().powered_on, true);
+            assert_eq!(avr.status().reset_count, 0);
         }
 
         avr.reset();
-        assert_eq!(avr.state().powered_on, true);
-        assert_eq!(avr.state().reset_count, 1);
+        assert_eq!(avr.status().powered_on, true);
+        assert_eq!(avr.status().reset_count, 1);
         avr.reset();
-        assert_eq!(avr.state().powered_on, true);
-        assert_eq!(avr.state().reset_count, 2);
+        assert_eq!(avr.status().powered_on, true);
+        assert_eq!(avr.status().reset_count, 2);
     }
 
     #[test]
     fn has_reset_makes_sense() {
         let mut avr = atmega328();
-        assert_eq!(avr.state().has_reset(), false);
+        assert_eq!(avr.status().has_reset(), false);
 
         // Run a few cycles for good measure.
         for _ in 0..4 {
             avr.run_cycle();
-            assert_eq!(avr.state().has_reset(), false);
+            assert_eq!(avr.status().has_reset(), false);
         }
 
         avr.reset();
-        assert_eq!(avr.state().has_reset(), true);
+        assert_eq!(avr.status().has_reset(), true);
     }
 }
