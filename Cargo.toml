@@ -1,15 +1,15 @@
 [package]
-name = "avrtest"
+name = "avr-testsuite"
 version = "0.1.0"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 
 [[bin]]
-name = "avrlit"
-path = "src/avrlit/main.rs"
+name = "avr-lit"
+path = "src/avr-lit/main.rs"
 
 [[bin]]
-name = "avrsim"
-path = "src/avrsim/main.rs"
+name = "avr-sim"
+path = "src/avr-sim/main.rs"
 
 [dependencies]
 lit = "0.2.4"
