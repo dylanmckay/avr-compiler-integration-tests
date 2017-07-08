@@ -1,35 +1,54 @@
 extern crate simavr_sys as simavr;
 #[macro_use]
 extern crate bitflags;
+extern crate tempfile;
 
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;
 
 use std::io::prelude::*;
-use std::io::stderr;
-use std::process;
+use std::io::{self, stderr};
+use std::{env, process};
+
+fn open_firmware() -> Result<sim::Firmware, io::Error> {
+    // See if a path was specified on the command line.
+    match env::args().skip(1).next() {
+        Some(path) => {
+            Ok(sim::Firmware::read_elf_via_disk(path).unwrap())
+        }
+        // Assume standard input.
+        None => {
+            writeln!(stderr(), "note: no firmware path specified, reading from stdin").unwrap();
+            let mut buffer = Vec::new();
+            io::stdin().read_to_end(&mut buffer)?;
+            Ok(sim::Firmware::read_elf(&buffer).unwrap())
+        },
+    }
+}
 
 fn main() {
     let mut avr = sim::Avr::with_name("atmega328").unwrap();
-    // let firmware = sim::Firmware::read_elf("arduino-uart-loop.elf").unwrap();
-    let firmware = sim::Firmware::read_elf("arduino-uart-single.elf").unwrap();
 
+    let firmware = open_firmware().expect("could not open firmware");
     println!("firmware: {:?}", firmware.raw().flashbase);
 
     avr.flash(&firmware);
     sim::uart::attach_to_stdout(&mut avr);
 
     loop {
-        println!("pc: {}", avr.raw().pc);
         match avr.run_cycle() {
             sim::State::Running => (),
             sim::State::Crashed => {
                 writeln!(stderr(), "simulation crashed").unwrap();
                 process::exit(1);
             },
-            state if !state.is_running() => break,
             // Keep running when in setup,limbo,etc.
-            e => println!("state {:?}", e),
+            state => {
+                println!("state {:?}", state);
+                if !state.is_running() {
+                    break;
+                }
+            },
         }
     }
 }

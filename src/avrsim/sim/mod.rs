@@ -269,7 +269,6 @@ mod util {
     /// Gets the `Status` that is stored inside the custom data field on an `avr_t`.
     pub unsafe fn get_mcu_status<'a>(avr: *mut simavr::avr_t) -> &'a mut Status {
         let ptr = (*avr).data;
-        println!("found status at {}", ptr as usize);
         let mut boxed: Box<Status> = Box::from_raw(ptr as *mut Status);
 
         let status: &'a mut Status = mem::transmute(boxed.as_mut());

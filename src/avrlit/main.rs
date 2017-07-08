@@ -18,6 +18,6 @@ fn main() {
         config.add_extension("cpp");
 
         config.constants.insert("cxx".to_owned(), compiler.executable_path.to_owned());
-    })
+    }).expect("failed tests");
 }
 

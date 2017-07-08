@@ -12,8 +12,8 @@ name = "avrsim"
 path = "src/avrsim/main.rs"
 
 [dependencies]
-lit = "0.2.2"
+lit = "0.2.4"
 simavr-sys = { path = "../simavr-sys", features = ["trace"] }
 bitflags = "0.9"
-
+tempfile = "2.1"
 

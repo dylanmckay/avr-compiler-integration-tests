@@ -2,9 +2,12 @@ use simavr;
 
 use super::Avr;
 
+use std::io;
+use std::io::prelude::*;
 use std::ffi::CString;
 use std::mem;
 use std::path::Path;
+use tempfile::NamedTempFile;
 
 /// Something which can be flashes to program memory.
 pub trait Flashable {
@@ -24,7 +27,7 @@ impl Firmware {
     }
 
     /// Reads firmware from an ELF file on disk.
-    pub fn read_elf<P>(path: P) -> Result<Self, ()>
+    pub fn read_elf_via_disk<P>(path: P) -> Result<Self, ()>
         where P: AsRef<Path> {
         let path = CString::new(path.as_ref().to_str().unwrap()).unwrap();
 
@@ -37,6 +40,15 @@ impl Firmware {
         };
 
         Ok(Firmware::from_raw(firmware))
+    }
+
+    /// Reads firmware from an ELF file in memory.
+    pub fn read_elf<T>(bytes: T) -> Result<Self, io::Error>
+        where T: AsRef<[u8]> {
+        let mut tempfile = NamedTempFile::new()?;
+        tempfile.write(bytes.as_ref())?;
+
+        Ok(Firmware::read_elf_via_disk(tempfile.path()).unwrap())
     }
 
     /// Gets the underlying value of the firmware.
