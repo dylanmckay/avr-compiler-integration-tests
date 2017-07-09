@@ -269,7 +269,9 @@ mod util {
         }
     }
 
-    pub unsafe extern fn logger(avr: *mut simavr::avr_t,
+    /// The global logger hook.
+    /// Gets called on every error/debug/trace/output message.
+    pub unsafe extern fn logger(_avr: *mut simavr::avr_t,
                                 level: c_int,
                                 fmt: *const c_char,
                                 args: *mut simavr::__va_list_tag) {
