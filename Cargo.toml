@@ -1,5 +1,5 @@
 [package]
-name = "avr-testsuite"
+name = "avr-test-suite"
 version = "0.1.0"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 
