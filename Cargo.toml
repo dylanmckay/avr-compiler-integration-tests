@@ -12,8 +12,7 @@ name = "avr-sim"
 path = "src/avr-sim/main.rs"
 
 [dependencies]
-# lit = "0.2.5"
-lit = { path = "../lit" }
+lit = "0.2.5"
 simavr-sys = { path = "../simavr-sys" }
 bitflags = "0.9"
 tempfile = "2.1"
