@@ -3,6 +3,8 @@ pub use self::flashable::{Flashable, Firmware};
 pub mod uart;
 pub mod ioctl;
 mod flashable;
+#[cfg(test)]
+mod test_util;
 
 use simavr;
 

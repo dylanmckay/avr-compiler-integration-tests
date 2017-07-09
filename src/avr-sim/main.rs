@@ -30,7 +30,6 @@ fn main() {
     let mut avr = sim::Avr::with_name("atmega328").unwrap();
 
     let firmware = open_firmware().expect("could not open firmware");
-    println!("firmware: {:?}", firmware.raw().flashbase);
 
     avr.flash(&firmware);
     sim::uart::attach_to_stdout(&mut avr);

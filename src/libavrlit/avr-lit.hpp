@@ -1,6 +1,7 @@
 #define F_CPU 16000000UL
 
 #include <stdio.h>
+#include <stdint.h>
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -73,26 +74,91 @@ namespace power {
 }
 
 namespace test {
+/// Prints a stringified expression and its value.
+#define eval(expr) \
+  { test::printf("%s = ", #expr); \
+    test::println(expr); \
+  }
+
+  // Used for vardic generics, look for 'expansion marker'.
+  // https://en.wikipedia.org/wiki/Variadic_template
+  struct pass {
+    template<typename ...T> pass(T...) {}
+  };
+
   /// Prints a format string to the test harness.
   template<typename... Params>
-  void print(const char *fmt, Params... parameters) {
+  void printf(const char *fmt, Params... parameters) {
     char buffer[256];
     sprintf(buffer, fmt, parameters...);
     uart::send(buffer);
   }
 
-  /// Print a format string to the test harness with a new line.
+  void print(unsigned char i) { printf("%hhu", i); }
+  void print(signed char i) { printf("%hhi", i); }
+  void print(unsigned short i) { printf("%hu", i); }
+  void print(signed short i) { printf("%hi", i); }
+  void print(unsigned int i) { printf("%u", i); }
+  void print(signed int i) { printf("%i", i); }
+  void print(unsigned long i) { printf("%lu", i); }
+  void print(signed long i) { printf("%li", i); }
+  void print(unsigned long long i) { printf("%lu", i); }
+  void print(signed long long i) { printf("%li", i); }
+
+  void print(bool b) { b ? print("true") : print("false"); }
+  void print(char c) { printf("%c", c); }
+
+  void print(float f) { printf("%f", f); }
+  void print(double d) { printf("%f", d); }
+  void print(long double d) { printf("%Lf", d); }
+
+  void print(const char *s) { printf("%s", s); }
+
+  /// Prints a list of values.
   template<typename... Params>
-  void println(const char *fmt, Params... parameters) {
-    print(fmt, parameters...);
+  void print(Params... arguments) {
+    pass{(print(arguments), 1)...};
+  }
+
+  /// Prints a new line character.
+  void println() {
     uart::send('\n');
   }
+
+  /// Prints one or more values and then a new line character.
+  template<typename... Params>
+  void println(Params... arguments) {
+    print(arguments...);
+    println();
+  }
+
+  /// Print a format string to the test harness with a new line.
+  template<typename... Params>
+  void printlnf(const char *fmt, Params... arguments) {
+    printf(fmt, arguments...);
+    println();
+  }
+
+  /// Calls a function with an optional list of arguments, printing the given
+  /// function name, arguments, and the result.
+  template<typename Fn, typename... Params>
+  void print_call(const char *name, Fn fn, Params... arguments) {
+    print(name, "(");
+    print(arguments...);
+
+    auto value = fn(arguments...);
+    println(") = ", value);
+  }
+
+/// Calls a function with an optional list of arguments, printing the function
+/// name, arguments, and the result.
+#define call(fn, ...) test::print_call(#fn, fn, ##__VA_ARGS__)
 
   /// Prints an error message and triggers the debugger.
   template<typename... Params>
   void error(const char *fmt, Params... parameters) {
     print("error: ");
-    println(fmt, parameters...);
+    printlnf(fmt, parameters...);
 
     // Cause some weird memory accesses to trigger
     // an error.

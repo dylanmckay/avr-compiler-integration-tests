@@ -83,6 +83,7 @@ impl<T> Flashable for T
 
 #[cfg(test)]
 mod test {
+    use sim::test_util::firmwares;
     use super::super::State;
     use super::*;
 
@@ -100,7 +101,7 @@ mod test {
 
     #[test]
     fn can_flash_elf_file() {
-        let firmware = Firmware::read_elf("arduino-uart-single.elf").unwrap();
+        let firmware = firmwares::atmega328::factorial();
         let mut avr = atmega328();
         avr.flash(&firmware);
     }

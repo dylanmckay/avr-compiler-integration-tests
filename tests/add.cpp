@@ -1,16 +1,11 @@
-// RUN: avr-gcc -mmcu=atmega328p  @file -o /tmp/add.elf && avrsim /tmp/add.elf
+// RUN: avr-gcc -mmcu=atmega328p @file -o /dev/stdout | avr-sim
 
-#include "avrlit.hpp"
+#include "../src/libavrlit/avr-lit.hpp"
 
 using namespace test;
 
-// CHECK: bar
-// CHECK: foo
+// CHECK: eval(1 + 1) = 2
 void run_test() {
-  int a = 1 + 1;
-
-  println("bar");
-  println("foo");
-  // error("your mum");
+  eval(1 + 1);
 }
 
