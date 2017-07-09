@@ -10,7 +10,8 @@ Uses [simavr](https://github.com/buserror/simavr) under the hood.
 git clone https://github.com/dylanmckay/avr-test-suite.git
 cd avr-test-suite
 
-cargo run --bin avr-lit
+# Run all tests
+./test.sh
 ```
 
 # Binaries
