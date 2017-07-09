@@ -11,8 +11,8 @@
 #define BAUD_PRESCALE (((F_CPU / (USART_BAUDR0ATE * 16UL))) - 1)
 
 /// Assert that a condition is true.
-#define ASSERT(expr, message) \
-  { test::assert(expr, __FILE__, __LINE__, __FUNCTION__, #expr, message); }
+#define assert(expr, message) \
+  { test::assert_impl(expr, __FILE__, __LINE__, __FUNCTION__, #expr, message); }
 
 namespace uart {
   volatile unsigned char value;
@@ -169,12 +169,12 @@ namespace test {
   }
 
   /// Asserts that some condition is true.
-  void assert(bool condition,
-              const char *file,
-              uint32_t line,
-              const char *func_name,
-              const char *expr,
-              const char *message) {
+  void assert_impl(bool condition,
+                   const char *file,
+                   uint32_t line,
+                   const char *func_name,
+                   const char *expr,
+                   const char *message) {
     if (!condition) {
       error("assertion failed [%s:%s():%d] %s (%s) is not true",
             file, func_name, line, expr, message);
