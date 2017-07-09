@@ -8,10 +8,10 @@ mod test_util;
 
 use simavr;
 
-use std::os::raw::c_int;
 use std::ffi::{CString, CStr};
 use std::mem;
 use std::ptr;
+use std::os::raw::*;
 
 /// An AVR instance.
 pub struct Avr {
@@ -76,17 +76,19 @@ bitflags! {
 
 impl Avr {
     pub unsafe fn from_raw(avr: *mut simavr::avr_t) -> Self {
+        // Set the simavr global logger hook.
+        // We do this upon every new `Avr` object but we could
+        // do it once on program initialisation if we wanted.
+        simavr::avr_global_logger_set(Some(util::logger));
+
         let mut avr = Avr {
             avr: avr,
             current_state: State::initial(),
         };
 
-        avr.raw_mut().set_log(simavr::LOG_TRACE as _);
-        // avr.raw_mut().set_trace(10);
-
-        util::set_mcu_status(Status::default(), avr.avr);
         avr.raw_mut().reset = Some(util::on_reset);
 
+        util::set_mcu_status(Status::default(), avr.avr);
         simavr::avr_init(avr.avr);
 
         avr.set_frequency(16_000_000);
@@ -248,6 +250,11 @@ impl From<c_int> for State {
 
 mod util {
     use super::*;
+    use std::io::prelude::*;
+    use std::io::stderr;
+    use std::process;
+
+    use vsprintf::vsprintf;
 
     /// Hook that runs when the mcu receives a reset signal.
     pub unsafe extern fn on_reset(avr: *mut simavr::avr_t) {
@@ -259,6 +266,29 @@ mod util {
         } else {
             // A standard reset.
             mcu_status.reset_count += 1;
+        }
+    }
+
+    pub unsafe extern fn logger(avr: *mut simavr::avr_t,
+                                level: c_int,
+                                fmt: *const c_char,
+                                args: *mut simavr::__va_list_tag) {
+        let message = vsprintf(fmt, args as *mut _).unwrap();
+        // Cast the level enum to its Rust bindgen enum.
+        let level_kind = mem::transmute(level);
+
+        match level_kind {
+            simavr::LOG_NONE => (),
+            simavr::LOG_OUTPUT => (),
+            simavr::LOG_ERROR => {
+                writeln!(stderr(), "error: {}", message).ok();
+                process::exit(1);
+            },
+            simavr::LOG_WARNING => {
+                writeln!(stderr(), "warning: {}", message).ok();
+            },
+            simavr::LOG_TRACE => (),
+            simavr::LOG_DEBUG => (),
         }
     }
 
@@ -358,13 +388,5 @@ mod test {
         avr.run_cycle();
         assert_eq!(avr.state(), &State::Running);
     }
-
-    // #[test]
-    // fn status_register_makes_sense() {
-    //     let mut avr = atmega328();
-    //     // assert_eq!(avr.status_register(), StatusRegister::empty());
-    //     avr.flash(&[0b1001_0100, 0b_0111_1000]);
-    //     avr.run_cycle();
-    //     assert_eq!(avr.status_register(), StatusRegister::empty());
-    // }
 }
+

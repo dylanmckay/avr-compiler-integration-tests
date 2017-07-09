@@ -4,7 +4,7 @@
 
 using namespace test;
 
-// CHECK: eval(1 + 1) = 2
+// CHECK: 1 + 1 = 2
 void run_test() {
   eval(1 + 1);
 }

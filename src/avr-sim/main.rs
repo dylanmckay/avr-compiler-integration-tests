@@ -2,6 +2,7 @@ extern crate simavr_sys as simavr;
 #[macro_use]
 extern crate bitflags;
 extern crate tempfile;
+extern crate vsprintf;
 
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;
@@ -42,12 +43,9 @@ fn main() {
                 process::exit(1);
             },
             // Keep running when in setup,limbo,etc.
-            state => {
-                println!("state {:?}", state);
-                if !state.is_running() {
-                    break;
-                }
-            },
+            state if !state.is_running() => break,
+            // We don't care about other states.
+            _ => (),
         }
     }
 }
