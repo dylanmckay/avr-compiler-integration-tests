@@ -3,6 +3,13 @@ name = "avr-test-suite"
 version = "0.1.0"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 
+description = "An AVR compiler integration test suite"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/dylanmckay/avr-test-suite"
+documentation = "https://docs.rs/avr-test-suite"
+keywords = ["avr", "emulator", "microcontroller", "io", "cpu"]
+
 [[bin]]
 name = "avr-lit"
 path = "src/avr-lit/main.rs"
