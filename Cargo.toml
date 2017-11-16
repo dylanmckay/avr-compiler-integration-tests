@@ -13,7 +13,7 @@ path = "src/avr-sim/main.rs"
 
 [dependencies]
 lit = "0.2.6"
-simavr-sys = { path = "../simavr-sys" }
+simavr-sys = "1.5.1"
 bitflags = "0.9"
 tempfile = "2.1"
 vsprintf = "1.0"

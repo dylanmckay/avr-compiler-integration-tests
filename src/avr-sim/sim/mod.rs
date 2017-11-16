@@ -291,6 +291,7 @@ mod util {
             },
             simavr::LOG_TRACE => (),
             simavr::LOG_DEBUG => (),
+            _ => (),
         }
     }
 
