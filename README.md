@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/avr-test-suite.svg)](https://crates.io/crates/avr-test-suite)
 [![Build Status](https://travis-ci.org/dylanmckay/avr-test-suite.svg?branch=master)](https://travis-ci.org/dylanmckay/avr-test-suite)
-[![license](https://img.shields.io/github/license/avr-rust/avr-test-suite.svg)]()
+[![license](https://img.shields.io/github/license/dylanmckay/avr-test-suite.svg)]()
 
 A standalone test-suite for AVR compilers.
 
