@@ -1,4 +1,4 @@
-// RUN: avr-gcc -mmcu=atmega328p @file -o /dev/stdout | avr-sim
+// RUN: @cxx -mmcu=atmega328p @file -o /dev/stdout | avr-sim
 
 #include "../src/libavrlit/avr-lit.hpp"
 
