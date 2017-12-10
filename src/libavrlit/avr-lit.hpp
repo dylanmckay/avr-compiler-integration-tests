@@ -1,11 +1,10 @@
 #define F_CPU 16000000UL
 
-#include "avr-libc/stdio.h"
-#include "avr-libc/stdint.h"
-
 #include "io/io.h"
-#include "avr-libc/avr/interrupt.h"
-#include "avr-libc/avr/sleep.h"
+#include "interrupt.h"
+#include "stdlib/avr/sleep.h"
+
+#include "TinyCStringBuilder/CStringBuilder.hpp"
 
 #define USART_BAUDR0ATE 9600
 #define BAUD_PRESCALE (((F_CPU / (USART_BAUDR0ATE * 16UL))) - 1)
@@ -35,7 +34,6 @@ namespace uart {
     }
     return (uint8_t) UDR0;
   }
-
 
   /// Sends a single byte through the UART.
   void send(uint8_t data){
@@ -78,7 +76,9 @@ namespace power {
 namespace test {
 /// Prints a stringified expression and its value.
 #define eval(expr) \
-  { test::printf("%s = ", #expr); \
+  { \
+    test::print(#expr); \
+    test::print(" = "); \
     test::println(expr); \
   }
 
@@ -88,38 +88,43 @@ namespace test {
     template<typename ...T> pass(T...) {}
   };
 
-  /// Prints a format string to the test harness.
-  template<typename... Params>
-  void printf(const char *fmt, Params... parameters) {
-    char buffer[256];
-    sprintf(buffer, fmt, parameters...);
-    uart::send(buffer);
+  /// Prints a string.
+  void put(const char *s) {
+    uart::send(s);
   }
 
-  void print(unsigned char i) { printf("%hhu", i); }
-  void print(signed char i) { printf("%hhi", i); }
-  void print(unsigned short i) { printf("%hu", i); }
-  void print(signed short i) { printf("%hi", i); }
-  void print(unsigned int i) { printf("%u", i); }
-  void print(signed int i) { printf("%i", i); }
-  void print(unsigned long i) { printf("%lu", i); }
-  void print(signed long i) { printf("%li", i); }
-  void print(unsigned long long i) { printf("%lu", i); }
-  void print(signed long long i) { printf("%li", i); }
+  /// Writes a value to the UART as a string.
+  template<typename T>
+  void put_value(T val) {
+    char buffer[256];
+    tcsb::CStringBuilder builder(buffer);
 
-  void print(bool b) { b ? print("true") : print("false"); }
-  void print(char c) { printf("%c", c); }
+    builder << val;
+    put(builder.cstr());
+  }
 
-  void print(float f) { printf("%f", f); }
-  void print(double d) { printf("%f", d); }
-  void print(long double d) { printf("%Lf", d); }
+  /// Prints a single value to the UART as a string.
+  template<typename T>
+  void put(T value);
 
-  void print(const char *s) { printf("%s", s); }
+  template<> void put(int8_t i) { put_value(i); }
+  template<> void put(uint16_t i) { put_value(i); }
+  template<> void put(int16_t i) { put_value(i); }
+  template<> void put(uint32_t i) { put_value(i); }
+  template<> void put(int32_t i) { put_value(i); }
+  template<> void put(uint64_t i) { put_value(i); }
+  template<> void put(int64_t i) { put_value(i); }
+  template<> void put(signed int i) { put_value(int16_t(i)); }
+  template<> void put(unsigned int i) { put_value(uint16_t(i)); }
+  template<> void put(bool b) { b ? put("true") : put("false"); }
+  template<> void put(char c) { put_value(c); }
+  template<> void put(float f) { put_value(f); }
+  template<> void put(double d) { put(float(d)); }
 
   /// Prints a list of values.
   template<typename... Params>
   void print(Params... arguments) {
-    pass{(print(arguments), 1)...};
+    pass{(put(arguments), 1)...};
   }
 
   /// Prints a new line character.
@@ -131,13 +136,6 @@ namespace test {
   template<typename... Params>
   void println(Params... arguments) {
     print(arguments...);
-    println();
-  }
-
-  /// Print a format string to the test harness with a new line.
-  template<typename... Params>
-  void printlnf(const char *fmt, Params... arguments) {
-    printf(fmt, arguments...);
     println();
   }
 
@@ -158,9 +156,9 @@ namespace test {
 
   /// Prints an error message and triggers the debugger.
   template<typename... Params>
-  void error(const char *fmt, Params... parameters) {
+  void error(Params... parameters) {
     print("error: ");
-    printlnf(fmt, parameters...);
+    println(parameters...);
 
     // Cause some weird memory accesses to trigger
     // an error.
@@ -178,8 +176,8 @@ namespace test {
                    const char *expr,
                    const char *message) {
     if (!condition) {
-      error("assertion failed [%s:%s():%d] %s (%s) is not true",
-            file, func_name, line, expr, message);
+      error("assertion failed [", file, ":", func_name, "():", line, "] ", expr,
+            "(", message, ") is not true");
     }
   }
 }

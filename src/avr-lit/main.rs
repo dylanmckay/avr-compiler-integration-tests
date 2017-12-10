@@ -34,7 +34,7 @@ fn main() {
             .takes_value(true))
         .arg(Arg::with_name("TESTS")
             .help("Sets the tests to run")
-            .required(true)
+            .required(false)
             .index(1))
         .arg(Arg::with_name("v")
            .short("v")
@@ -77,7 +77,12 @@ fn main() {
     // Gets a value for config if supplied by user, or defaults to "default.conf"
 
     lit::run::tests(|config| {
-        config.add_search_path(format!("{}/tests", CRATE_PATH));
+        if let Some(tests_path) = matches.value_of("TESTS") {
+            config.add_search_path(tests_path);
+        } else {
+            // No tests explicitly passed, default to all.
+            config.add_search_path(format!("{}/tests", CRATE_PATH));
+        }
         config.add_extension("c");
         config.add_extension("cpp");
 
@@ -113,7 +118,7 @@ fn gnu_tools() -> Option<Compiler> {
 fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
     let mut flags = vec![
         "-mmcu=atmega328p",
-        "-Isrc/libavrlit/avr-libc",
+        "-Isrc/libavrlit/stdlib",
         "-std=c++11",
     ];
 

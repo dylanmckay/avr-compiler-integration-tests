@@ -1,0 +1,3 @@
+[submodule "src/libavrlit/TinyCStringBuilder"]
+	path = src/libavrlit/TinyCStringBuilder
+	url = https://github.com/DraTeots/TinyCStringBuilder.git
