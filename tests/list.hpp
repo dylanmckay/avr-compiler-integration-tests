@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdlib.h>
+#include <cstdlib>
 
 template<typename T>
 class List

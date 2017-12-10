@@ -1,1 +1,44 @@
+/**
+ * The worlds shittiest malloc implementation.
+ */
+
 #pragma once
+
+#include <cstddef>
+
+namespace {
+  const int HEAP_SIZE = 1500;
+
+  void* HEAP_START = (void*) 0x100;
+  void* HEAP_END = (void*) (size_t(HEAP_START) + size_t(HEAP_SIZE));
+
+  void* HEAP_CURRENT = HEAP_START;
+
+  inline size_t remaining_size() {
+    return size_t(HEAP_END) - size_t(HEAP_CURRENT);
+  }
+}
+
+namespace std {
+  void* malloc(size_t size) {
+    // At the moment, we will happily allocate past HEAP_END.
+    // FIXME: assert(remaining_size() >= size);
+
+    void* ptr = HEAP_CURRENT;
+    HEAP_CURRENT = (void*) (size_t(HEAP_CURRENT) + size);
+    return ptr;
+  }
+
+  void free(void *ptr) {
+    // lol
+  }
+
+  void *realloc(void *ptr, size_t new_size) {
+    void *new_block = malloc(new_size);
+    // FIXME: probably should only copy the old occupied bytes.
+    memcpy(new_block, ptr, new_size);
+  }
+}
+
+using namespace std;
+

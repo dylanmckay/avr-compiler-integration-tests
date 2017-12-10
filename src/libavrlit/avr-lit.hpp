@@ -4,6 +4,9 @@
 #include "interrupt.h"
 #include "stdlib/avr/sleep.h"
 
+#include <cstring>
+#include <cstdlib>
+
 #include "TinyCStringBuilder/CStringBuilder.hpp"
 
 #define USART_BAUDR0ATE 9600
