@@ -31,11 +31,17 @@ Usage
 ```bash
 cd avr-test-suite
 
-# Run all tests
-cargo run --bin avr-lit
+# Run all tests with avr-gcc
+cargo run --bin avr-lit -- --avr-gcc
 
-# Run specific test
-cargo run --bin avr-lit tests/add.cpp
+# Run specific test with avr-gcc
+cargo run --bin avr-lit -- --avr-gcc tests/add.cpp
+
+# Run all tests with llvm
+cargo run --bin avr-lit -- --llvm-sysroot /path/to/llvm/buildtree
+
+# Run specific test with avr-gcc
+cargo run --bin avr-lit -- --llvm-sysroot /path/to/llvm/buildtree tests/add.cpp
 ```
 
 ## `avr-sim`
