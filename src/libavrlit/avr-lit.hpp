@@ -1,11 +1,11 @@
 #define F_CPU 16000000UL
 
-#include <stdio.h>
-#include <stdint.h>
+#include "avr-libc/stdio.h"
+#include "avr-libc/stdint.h"
 
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <avr/sleep.h>
+#include "io/io.h"
+#include "avr-libc/avr/interrupt.h"
+#include "avr-libc/avr/sleep.h"
 
 #define USART_BAUDR0ATE 9600
 #define BAUD_PRESCALE (((F_CPU / (USART_BAUDR0ATE * 16UL))) - 1)
@@ -30,8 +30,10 @@ namespace uart {
 
   /// Wait for a byte to be received and return it.
   uint8_t receive() {
-    while (!(UCSR0A & _BV(RXC0))) ;
-      return (uint8_t) UDR0;
+    while (!(UCSR0A & _BV(RXC0))) {
+      asm ("");
+    }
+    return (uint8_t) UDR0;
   }
 
 

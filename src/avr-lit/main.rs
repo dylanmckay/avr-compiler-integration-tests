@@ -2,6 +2,7 @@ extern crate lit;
 extern crate clap;
 
 use clap::{App, Arg};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -14,6 +15,8 @@ struct Compiler {
     cc: PathBuf,
     /// The C++ compiler.
     cxx: PathBuf,
+    /// Flags to be passed to both C and C++ compilers.
+    compiler_flags: Vec<&'static str>,
 }
 
 fn main() {
@@ -78,11 +81,18 @@ fn main() {
         config.add_extension("c");
         config.add_extension("cpp");
 
-        config.constants.insert("cxx".to_owned(),
-                                compiler.cxx.display().to_string());
-        config.constants.insert("cc".to_owned(),
-                                compiler.cc.display().to_string());
+        insert_constants(&mut config.constants, &compiler);
     }).expect("failed tests");
+}
+
+fn insert_constants(constants: &mut HashMap<String, String>, compiler: &Compiler) {
+    constants.insert("cc".to_owned(),
+                     compiler.cc.display().to_string());
+    constants.insert("cflags".to_owned(), compiler.compiler_flags.join(" "));
+
+    constants.insert("cxx".to_owned(),
+                     compiler.cxx.display().to_string());
+    constants.insert("cxxflags".to_owned(), compiler.compiler_flags.join(" "));
 }
 
 fn gnu_tools() -> Option<Compiler> {
@@ -93,10 +103,22 @@ fn gnu_tools() -> Option<Compiler> {
             Some(Compiler {
                 cc: cc_path.to_owned(),
                 cxx: exec_dir.join("avr-g++"),
+                compiler_flags: all_compiler_flags(&[]),
             })
         },
         None => None,
     }
+}
+
+fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
+    let mut flags = vec![
+        "-mmcu=atmega328p",
+        "-Isrc/libavrlit/avr-libc",
+        "-std=c++11",
+    ];
+
+    flags.extend(other_flags);
+    flags
 }
 
 fn detect_compiler(sysroot: &Path) -> Option<Compiler> {
@@ -106,6 +128,11 @@ fn detect_compiler(sysroot: &Path) -> Option<Compiler> {
         Some(Compiler {
             cc: bin_dir.join("clang"),
             cxx: bin_dir.join("clang++"),
+            compiler_flags: all_compiler_flags(&[
+                "-target", "avr-unknown-unknown",
+                "-D__AVR_ATmega328P__", // clang does not set this yet
+                "--verbose",
+            ]),
         })
     } else {
         None

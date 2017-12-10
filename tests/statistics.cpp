@@ -1,4 +1,4 @@
-// RUN: @cxx -mmcu=atmega328p @file -o /dev/stdout | avr-sim
+// RUN: @cxx @cxxflags @file -o /tmp/statistics.cpp.elf -Isrc/libavrlit/avr-libc -std=c++11 -D__AVR_ATmega328P__ && avr-sim /tmp/statistics.cpp.elf
 
 #include "../src/libavrlit/avr-lit.hpp"
 
