@@ -37,6 +37,8 @@ namespace std {
     void *new_block = malloc(new_size);
     // FIXME: probably should only copy the old occupied bytes.
     memcpy(new_block, ptr, new_size);
+    free(ptr);
+    return new_block;
   }
 }
 
