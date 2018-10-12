@@ -135,8 +135,7 @@ fn detect_compiler(sysroot: &Path) -> Option<Compiler> {
             cxx: bin_dir.join("clang++"),
             compiler_flags: all_compiler_flags(&[
                 "-target", "avr-unknown-unknown",
-                "-D__AVR_ATmega328P__", // clang does not set this yet
-                "--verbose",
+                "--verbose", "-O",
             ]),
         })
     } else {
