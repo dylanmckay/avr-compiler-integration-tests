@@ -19,7 +19,7 @@ name = "avr-sim"
 path = "src/avr-sim/main.rs"
 
 [dependencies]
-lit = "0.2"
+lit = "0.3"
 simavr-sys = "1.5"
 bitflags = "1.0"
 tempfile = "3.0"
