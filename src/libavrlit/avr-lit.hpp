@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cstdlib>
 
+// Disable floating point support in CStringBuilder.
+#define TCSB_USE_FP 0
 #include "TinyCStringBuilder/CStringBuilder.hpp"
 
 #define USART_BAUDR0ATE 9600
@@ -121,8 +123,6 @@ namespace test {
   template<> void put(unsigned int i) { put_value(uint16_t(i)); }
   template<> void put(bool b) { b ? put("true") : put("false"); }
   template<> void put(char c) { put_value(c); }
-  template<> void put(float f) { put_value(f); }
-  template<> void put(double d) { put(float(d)); }
 
   /// Prints a list of values.
   template<typename... Params>
