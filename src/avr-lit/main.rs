@@ -120,6 +120,7 @@ fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
         "-mmcu=atmega328p",
         "-Isrc/libavrlit/stdlib",
         "-std=c++11",
+        "-ffunction-sections",
     ];
 
     flags.extend(other_flags);
