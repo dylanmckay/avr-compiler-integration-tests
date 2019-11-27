@@ -83,7 +83,7 @@ impl<T> Flashable for T
 
 #[cfg(test)]
 mod test {
-    use sim::test_util::firmwares;
+    use crate::sim::test_util::firmwares;
     use super::super::State;
     use super::*;
 

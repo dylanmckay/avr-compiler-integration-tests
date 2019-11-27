@@ -1,28 +1,5 @@
-[package]
-name = "avr-test-suite"
-version = "0.1.1"
-authors = ["Dylan McKay <me@dylanmckay.io>"]
-
-description = "An AVR compiler integration test suite"
-license = "MIT"
-readme = "README.md"
-repository = "https://github.com/dylanmckay/avr-test-suite"
-documentation = "https://docs.rs/avr-test-suite"
-keywords = ["avr", "emulator", "microcontroller", "io", "cpu"]
-
-[[bin]]
-name = "avr-lit"
-path = "src/avr-lit/main.rs"
-
-[[bin]]
-name = "avr-sim"
-path = "src/avr-sim/main.rs"
-
-[dependencies]
-lit = "0.3"
-simavr-sys = "1.5"
-bitflags = "1.0"
-tempfile = "3.0"
-vsprintf = "1.0"
-clap = "2.32"
-
+[workspace]
+members = [
+  "src/avr-lit",
+  "src/avr-sim",
+]

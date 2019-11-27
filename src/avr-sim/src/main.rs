@@ -1,8 +1,5 @@
 extern crate simavr_sys as simavr;
-#[macro_use]
-extern crate bitflags;
-extern crate tempfile;
-extern crate vsprintf;
+#[macro_use] extern crate bitflags;
 
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;

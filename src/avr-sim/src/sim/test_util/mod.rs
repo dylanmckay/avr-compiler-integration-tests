@@ -3,7 +3,7 @@
 /// Firmwares that can be loaded.
 pub mod firmwares {
     pub mod atmega328 {
-        use sim::Firmware;
+        use crate::sim::Firmware;
 
         const FACTORIAL_ELF: &'static [u8] = include_bytes!("atmega328-factorial.elf");
 

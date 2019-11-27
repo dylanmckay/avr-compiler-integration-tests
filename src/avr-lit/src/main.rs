@@ -1,6 +1,3 @@
-extern crate lit;
-extern crate clap;
-
 use clap::{App, Arg};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

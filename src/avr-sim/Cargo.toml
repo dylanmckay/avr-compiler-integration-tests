@@ -1,0 +1,11 @@
+[package]
+name = "avr-sim"
+version = "0.1.0"
+authors = ["Dylan McKay <me@dylanmckay.io>"]
+edition = "2018"
+
+[dependencies]
+bitflags = "1.0"
+simavr-sys = "1.5"
+tempfile = "3.0"
+vsprintf = "1.0"
