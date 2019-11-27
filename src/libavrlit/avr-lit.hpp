@@ -190,7 +190,7 @@ void run_test();
 
 int main() {
   uart::init();
-  sei();
+  // sei();
 
   run_test();
   power::sleep_indefinitely();

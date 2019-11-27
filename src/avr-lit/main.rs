@@ -121,6 +121,7 @@ fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
         "-Isrc/libavrlit/stdlib",
         "-std=c++11",
         "-ffunction-sections",
+        "-g",
     ];
 
     flags.extend(other_flags);
