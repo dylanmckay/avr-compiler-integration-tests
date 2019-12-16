@@ -174,7 +174,7 @@ impl Avr {
         self.raw_mut().frequency = freq;
     }
 
-    pub unsafe fn underlying(&mut self) -> *mut simavr::avr_t {
+    pub unsafe fn underlying(&self) -> *mut simavr::avr_t {
         self.avr
     }
 

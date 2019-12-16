@@ -1,8 +1,8 @@
 #define F_CPU 16000000UL
 
-#include "io/io.h"
 #include "interrupt.h"
 #include "stdlib/avr/sleep.h"
+#include "stdlib/avr/io/io.h"
 
 #include <cstring>
 #include <cstdlib>
