@@ -1,8 +1,8 @@
 #define F_CPU 16000000UL
 
-#include "io/io.h"
 #include "interrupt.h"
 #include "stdlib/avr/sleep.h"
+#include "stdlib/avr/io/io.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -190,7 +190,7 @@ void run_test();
 
 int main() {
   uart::init();
-  sei();
+  // sei();
 
   run_test();
   power::sleep_indefinitely();

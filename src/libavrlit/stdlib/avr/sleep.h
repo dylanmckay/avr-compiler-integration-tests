@@ -35,6 +35,10 @@
 #ifndef _AVR_SLEEP_H_
 #define _AVR_SLEEP_H_ 1
 
+#include <avr/io.h>
+#include <stdint.h>
+
+
 /** \file */
 
 /** \defgroup avr_sleep <avr/sleep.h>: Power Management and Sleep Modes

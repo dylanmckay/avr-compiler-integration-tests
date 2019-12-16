@@ -1,4 +1,4 @@
-use sim::Avr;
+use crate::sim::Avr;
 use super::ioctl;
 
 use simavr;
