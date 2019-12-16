@@ -7,7 +7,7 @@ typedef struct {
   char text[200];
 } Result;
 
-// FIXME: LLVM corrupts the first character somehow.
+// FIXME LLVM corrupts the first character somehow.
 // CHECK: Hello world
 static Result *RESULT = (Result*) 0x123;
 
