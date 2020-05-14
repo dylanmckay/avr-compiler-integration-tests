@@ -1,41 +1,24 @@
-// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile --print-after=TEST_BUFFER=null_terminated=char
+// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile -w TEST_BUFFER=null_terminated=char
 
 #include "support/support.h"
 
-// char baef[100] = { 13};
-// int fart[8] = { ~1};
-char TEST_BUFFER[30] = "uninit";
+char TEST_BUFFER[30] = "initialized from data memory";
 
-// #include <avr/sleep.h>
+// This first check validates the assumption that RAM is zeroed at startup.
 //
-// typedef struct {
-//   char text[25];
-// } Result;
+// CHECK: before_execution(TEST_BUFFER) = ""
+
+// This next check ensures that the startup routines correctly
+// initialize RAM variables.
 //
-// // CHECK: Hello world
-// static Result *RESULT = (Result*) 0x60;
+// CHECK: changed(TEST_BUFFER) = "initialized from data memory"
 
-// Tells avr-sim to stop running the program.
-void sleep_indefinitely(void) {
-  asm("cli");
-  sleep_enable();
-  // sleep_bod_disable();
-
-  while(true) {
-    sleep_cpu();
-  }
-}
-
+// This final check ensures that the strcpy correctly updates
+// the destination buffer.
+// CHECK: after_execution(TEST_BUFFER) = "Hello there, world!"
 int main(void) {
-  // __asm__("nop");
-  // char * foo = (char*) 0x50;
-  // char foo[100];
-  // *foo = 'a';
-  // for(unsigned i=0; i<16000; i++) __asm__("nop");
-  // TEST_BUFFER[0] = 'F';
-  // TEST_BUFFER[1] = 0;
-  // memcpymate(TEST_BUFFER, "Hello there, world!", 6);
-  // strcpyz(TEST_BUFFER, "H");
+  strcpy(TEST_BUFFER, "Hello there, world!");
+
   sleep_indefinitely();
   return 0;
 }

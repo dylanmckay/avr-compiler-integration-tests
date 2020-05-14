@@ -74,6 +74,13 @@ fn parse_cmd_line() -> CommandLine {
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
+        .arg(Arg::with_name("watch")
+            .long("watch")
+            .short("w")
+            .value_name("WATCHABLE")
+            .help("Verbosely logs all updates to the given watchable (alias of '--print-before-after <WATCHABLE> --print-on-change <WATCHABLE>')")
+            .multiple(true)
+            .takes_value(true))
         .arg(Arg::with_name("print-before")
             .long("print-before")
             .value_name("WATCHABLE")
@@ -82,7 +89,6 @@ fn parse_cmd_line() -> CommandLine {
             .takes_value(true))
         .arg(Arg::with_name("print-on-change")
             .long("print-on-change")
-            .short("w")
             .value_name("WATCHABLE")
             .help("Print a value whenever it is traced. Watch all changes made on it.")
             .multiple(true)
@@ -92,6 +98,12 @@ fn parse_cmd_line() -> CommandLine {
             .long("print-after")
             .value_name("WATCHABLE")
             .help("Print a value after the program completes")
+            .multiple(true)
+            .takes_value(true))
+        .arg(Arg::with_name("print-before-after")
+            .long("print-before-after")
+            .value_name("WATCHABLE")
+            .help("Print a value both before the program starts and after the program completes")
             .multiple(true)
             .takes_value(true))
         .arg(Arg::with_name("EXECUTABLE PATH")
@@ -108,12 +120,21 @@ fn parse_cmd_line() -> CommandLine {
         .after_help(include_str!("../doc/cli_extended_help.txt"))
         .get_matches();
 
+    let parse_watches = |arg_name: &str| {
+        matches.values_of_lossy(arg_name).unwrap_or_else(|| Vec::new()).into_iter().map(|watch| watch.parse().unwrap()).collect::<Vec<Watch>>()
+    };
+
+    let print_on_everything = parse_watches("watch");
+    let print_before_after = parse_watches("print-before-after").into_iter().chain(print_on_everything.clone()).collect::<Vec<Watch>>();
+
+    let print_before = parse_watches("print-before").into_iter().chain(print_before_after.clone()).collect::<Vec<Watch>>();
+    let print_after = parse_watches("print-after").into_iter().chain(print_before_after.clone()).collect::<Vec<Watch>>();
+    let print_on_change = parse_watches("print-on-change").into_iter().chain(print_on_everything).collect::<Vec<Watch>>();
+
     CommandLine {
         executable_path: matches.value_of("EXECUTABLE PATH").map(Into::into),
-        print_before: matches.values_of_lossy("print-before").unwrap_or_else(|| Vec::new()).into_iter().map(|watch| watch.parse().unwrap()).collect(),
-        print_on_change: matches.values_of_lossy("print-on-change").unwrap_or_else(|| Vec::new()).into_iter().map(|watch| watch.parse().unwrap()).collect(),
-        print_after: matches.values_of_lossy("print-after").unwrap_or_else(|| Vec::new()).into_iter().map(|watch| watch.parse().unwrap()).collect(),
         gdb_server_port: if matches.is_present("gdb") { Some(DEFAULT_GDB_PORT) } else { None },
+        print_before, print_on_change, print_after,
     }
 }
 
@@ -154,9 +175,6 @@ fn parse_watchable_symbols_from_elf(elf_data: &[u8], avr: &sim::Avr) -> Vec<Watc
 
     let text_section = fetch_only_section_of_kind(object::SectionKind::Text, &object).unwrap();
     let data_section = fetch_only_section_of_kind(object::SectionKind::Data, &object).unwrap();
-
-    println!("text address: {:?}", text_section.address());
-    println!("data address: {:?}", data_section.address());
 
     'symbols: for (_, symbol) in object.symbols() {
         let symbol_name = if let Some(name) = symbol.name() {
@@ -199,7 +217,6 @@ fn main() {
 
     // NOTE: this should happen after the AVR program is flashed.
     let watchable_symbols = parse_watchable_symbols_from_elf(&firmware_buffer, &avr);
-    println!("possible watches: {:?}", watchable_symbols);
 
     if let Some(gdb_port) = command_line.gdb_server_port {
         avr.raw_mut().gdb_port = gdb_port as i32;
@@ -225,15 +242,13 @@ fn main() {
     dump_values("before_execution", &command_line.print_before[..], &watchable_symbols, &avr);
 
     let mut prior_values_watched_onchange = get_current_values(&command_line.print_on_change[..], &watchable_symbols, &avr);
-    let mut current_cycle_number: u64 = 0;
 
     loop {
-        current_cycle_number += 1;
-        // println!("tick {}", current_cycle_number);
+        let current_cycle_number = avr.raw().run_cycle_count;
+
         let sim_state =  avr.run_cycle();
 
         dump_onchanged_watches(&mut prior_values_watched_onchange, &command_line, &watchable_symbols, &avr, current_cycle_number);
-
 
         match sim_state {
             sim::State::Running | sim::State::Stopped => (),
@@ -248,7 +263,7 @@ fn main() {
         }
     }
 
-    dump_onchanged_watches(&mut prior_values_watched_onchange, &command_line, &watchable_symbols, &avr, current_cycle_number);
+    dump_onchanged_watches(&mut prior_values_watched_onchange, &command_line, &watchable_symbols, &avr, avr.raw().run_cycle_count);
 
     dump_values("after_execution", &command_line.print_after[..], &watchable_symbols, &avr);
 }
@@ -384,7 +399,7 @@ impl Watch {
     fn location(&self) -> String {
         match *self {
             Watch::MemoryAddress { ref space, ref address, .. } => format!("{} ({})", address, space.human_label()),
-            Watch::Symbol { ref name, .. } => format!("{} (symbol)", name)
+            Watch::Symbol { ref name, .. } => name.to_owned(),
         }
     }
 }
