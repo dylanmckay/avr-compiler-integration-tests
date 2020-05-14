@@ -1,20 +1,25 @@
-// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O2 && avr-sim @first_tempfile --print-after=datamem=0x123=null_terminated=char
+// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile --print-after=TEST_BUFFER=null_terminated=char
 
-#include <string.h>
-#include <avr/sleep.h>
+#include "support/support.h"
 
-typedef struct {
-  char text[200];
-} Result;
+// char baef[100] = { 13};
+// int fart[8] = { ~1};
+char TEST_BUFFER[30] = "uninit";
 
-// CHECK: Hello world
-static Result *RESULT = (Result*) 0x123;
+// #include <avr/sleep.h>
+//
+// typedef struct {
+//   char text[25];
+// } Result;
+//
+// // CHECK: Hello world
+// static Result *RESULT = (Result*) 0x60;
 
 // Tells avr-sim to stop running the program.
 void sleep_indefinitely(void) {
   asm("cli");
   sleep_enable();
-  sleep_bod_disable();
+  // sleep_bod_disable();
 
   while(true) {
     sleep_cpu();
@@ -22,7 +27,15 @@ void sleep_indefinitely(void) {
 }
 
 int main(void) {
-  strcpy(RESULT->text, "Hello world, this is a random string!");
+  // __asm__("nop");
+  // char * foo = (char*) 0x50;
+  // char foo[100];
+  // *foo = 'a';
+  // for(unsigned i=0; i<16000; i++) __asm__("nop");
+  // TEST_BUFFER[0] = 'F';
+  // TEST_BUFFER[1] = 0;
+  // memcpymate(TEST_BUFFER, "Hello there, world!", 6);
+  // strcpyz(TEST_BUFFER, "H");
   sleep_indefinitely();
   return 0;
 }

@@ -1,0 +1,39 @@
+Extended Help
+-------------
+
+  ========
+  CONCEPTS
+  ========
+
+    - <WATCHABLE>
+
+      A watchable is some memory value that the simulator is able to print
+      tracing messages for.
+
+      Example:
+
+        WATCHABLE = "datamem=0x50=null_terminated=char"
+
+          A null terminated C string starting at RAM address 0x50.
+
+        WATCHABLE = "TEST_BUFFER=null_terminated=char"
+
+          A null terminated C string stored in the ELF symbol 'TEST_BUFFER'.
+          The address of the variable will be resolved automatically by the
+          simulator if debug info is included in the ELF.
+
+  ========
+  EXAMPLES
+  ========
+
+    $ avr-sim test.elf --print-on-change=datamem=0x50=null_terminated=char \
+                       --print-after=datamem=0x50=null_terminated=char
+
+      Simulates 'test.elf' tracing the same value in RAM at different times.
+      The values are specified by their absolute memory addresses.
+
+
+    $ avr-sim foo.elf --print-on-change=TEST_BUFFER=null_terminated=char
+
+      Simulates 'test.elf' tracing the 'TEST_BUFFER' variable each time
+      it changes.

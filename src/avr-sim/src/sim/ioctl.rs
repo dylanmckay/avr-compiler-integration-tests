@@ -3,10 +3,10 @@
 
 /// Combines bytes together to form an ioctl flag.
 pub fn ioctl(a: u8, b: u8, c: u8, d: u8) -> u32 {
-    (((a as u32) << 24) |
-     ((b as u32) << 16) |
-     ((c as u32) << 8) |
-     ((d as u32)))
+    ((a as u32) << 24) |
+    ((b as u32) << 16) |
+    ((c as u32) << 8) |
+    ((d as u32))
 }
 
 /// Gets the ioctl flag for a UART with a name character.

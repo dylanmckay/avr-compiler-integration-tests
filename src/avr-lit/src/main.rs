@@ -17,7 +17,7 @@ struct Compiler {
 }
 
 fn main() {
-    let matches = App::new("avr-lit")
+    let app = App::new("avr-lit")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -32,12 +32,9 @@ fn main() {
         .arg(Arg::with_name("TESTS")
             .help("Sets the tests to run")
             .required(false)
-            .index(1))
-        .arg(Arg::with_name("v")
-           .short("v")
-           .multiple(true)
-           .help("Sets the level of verbosity"))
-        .get_matches();
+            .index(1));
+    let app = lit::config::clap::mount_inside_app(app, true);
+    let matches = app.get_matches();
 
     let avr_gcc_enabled = matches.is_present("avr-gcc");
     let llvm_sysroot = matches.value_of("llvm-sysroot");
@@ -73,17 +70,17 @@ fn main() {
 
     // Gets a value for config if supplied by user, or defaults to "default.conf"
 
-    lit::run::tests(|config| {
+    lit::run::tests(lit::event_handler::Default::default(), |config| {
         if let Some(tests_path) = matches.value_of("TESTS") {
             config.add_search_path(tests_path);
         } else {
             // No tests explicitly passed, default to all.
             config.add_search_path(format!("{}/tests", CRATE_PATH));
         }
-        config.add_extension("c");
-        config.add_extension("cpp");
+        config.add_extensions(&["c", "cpp"]);
 
         insert_constants(&mut config.constants, &compiler);
+        lit::config::clap::parse_arguments(&matches, config);
     }).expect("failed tests");
 }
 
