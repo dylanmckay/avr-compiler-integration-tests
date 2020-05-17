@@ -130,8 +130,7 @@ fn detect_compiler(sysroot: &Path) -> Option<Compiler> {
             cc: bin_dir.join("clang"),
             cxx: bin_dir.join("clang++"),
             compiler_flags: all_compiler_flags(&[
-                "-target", "avr-unknown-unknown",
-                "--verbose", "-O",
+                "-target", "avr-unknown-unknown", "-O",
             ]),
         })
     } else {
