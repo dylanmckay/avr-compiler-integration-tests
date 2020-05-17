@@ -15,7 +15,7 @@ git clone https://github.com/dylanmckay/avr-test-suite.git
 cd avr-test-suite
 
 # Run all tests
-./test.sh
+./run-tests.sh
 ```
 
 # Binaries
@@ -35,13 +35,13 @@ cd avr-test-suite
 cargo run --bin avr-lit -- --avr-gcc
 
 # Run specific test with avr-gcc
-cargo run --bin avr-lit -- --avr-gcc tests/add.cpp
+cargo run --bin avr-lit -- --avr-gcc tests/memory/copy-immediate-to-sram/copy_u32.cpp
 
 # Run all tests with llvm
 cargo run --bin avr-lit -- --llvm-sysroot /path/to/llvm/buildtree
 
 # Run specific test with avr-gcc
-cargo run --bin avr-lit -- --llvm-sysroot /path/to/llvm/buildtree tests/add.cpp
+cargo run --bin avr-lit -- --llvm-sysroot /path/to/llvm/buildtree tests/memory/copy-immediate-to-sram/copy_string.cpp
 ```
 
 ## `avr-sim`
@@ -69,4 +69,14 @@ avr-gcc main.c -mmcu=atmega328 -o /dev/stdout | cargo run --bin avr-sim MyExecut
 # Test format
 
 Uses the [lit](https://crates.io/crates/lit) crate.
+
+# Coverage
+
+  * Basic copying of immediates to SRAM
+
+# Tests yet to be implemented
+
+  * Calling convention tests
+  * Interrupt handler tests
+  * ... many more
 
