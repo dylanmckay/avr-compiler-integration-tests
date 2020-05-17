@@ -483,9 +483,15 @@ impl DataType {
 
         match *self {
             DataType::U8 => bytes.get(0).map(ToString::to_string).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::I8 => bytes.get(0).map(|&b| (b as i8).to_string()).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
             DataType::U16 => parse_number(2, |bytes| ByteOrder::read_u16(bytes).to_string()),
+            DataType::I16 => parse_number(2, |bytes| ByteOrder::read_i16(bytes).to_string()),
             DataType::U32 => parse_number(4, |bytes| ByteOrder::read_u32(bytes).to_string()),
             DataType::I32 => parse_number(4, |bytes| ByteOrder::read_i32(bytes).to_string()),
+            DataType::U64 => parse_number(8, |bytes| ByteOrder::read_u64(bytes).to_string()),
+            DataType::I64 => parse_number(8, |bytes| ByteOrder::read_i64(bytes).to_string()),
+            DataType::U128 => parse_number(16, |bytes| ByteOrder::read_u128(bytes).to_string()),
+            DataType::I128 => parse_number(16, |bytes| ByteOrder::read_i128(bytes).to_string()),
             DataType::Char => bytes.get(0).map(|&b| (b as char).to_string()).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
             DataType::NullTerminated(ref element_type) => {
                 let mut elements: Vec<String> = Vec::new();
@@ -514,7 +520,6 @@ impl DataType {
 
                 Ok((formatted_str, bytes_after_null))
             },
-            ref dt => unimplemented!("data type: {:?}", dt),
         }
     }
 }

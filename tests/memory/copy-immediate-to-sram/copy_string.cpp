@@ -1,6 +1,6 @@
 // RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile -w TEST_BUFFER=null_terminated=char
 
-#include <avrlit/avrlit.h>
+#include <avrlit/boilerplate/unit_test.h>
 
 char TEST_BUFFER[30] = "initialized from data memory";
 
@@ -16,10 +16,7 @@ char TEST_BUFFER[30] = "initialized from data memory";
 // This final check ensures that the strcpy correctly updates
 // the destination buffer.
 // CHECK: after_execution(TEST_BUFFER) = "Hello there, world!"
-int main(void) {
+void unit_test(void) {
   strcpy(TEST_BUFFER, "Hello there, world!");
-
-  sleep_indefinitely();
-  return 0;
 }
 

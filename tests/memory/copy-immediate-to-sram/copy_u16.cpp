@@ -1,6 +1,6 @@
 // RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @tempfile -O0 && avr-sim @tempfile -w OUTPUT_VALUE=u16
 
-#include <avrlit/avrlit.h>
+#include <avrlit/boilerplate/unit_test.h>
 
 uint32_t OUTPUT_VALUE = 0xbabe;
 
@@ -14,10 +14,7 @@ uint32_t OUTPUT_VALUE = 0xbabe;
 
 // This final check ensures that the assignment correctly updates the global variable.
 // CHECK: after_execution(OUTPUT_VALUE) = 51966
-int main(void) {
+void unit_test(void) {
   OUTPUT_VALUE = 0xcafe;
-
-  sleep_indefinitely();
-  return 0;
 }
 
