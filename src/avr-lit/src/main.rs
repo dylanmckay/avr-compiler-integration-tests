@@ -112,7 +112,7 @@ fn gnu_tools() -> Option<Compiler> {
 fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
     let mut flags = vec![
         "-mmcu=atmega328p",
-        "-Isrc/libavrlit/stdlib",
+        "-Isrc/libavrlit/include",
         "-std=c++11",
         "-ffunction-sections",
         "-g",

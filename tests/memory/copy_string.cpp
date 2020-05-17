@@ -1,6 +1,6 @@
 // RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile -w TEST_BUFFER=null_terminated=char
 
-#include "support/support.h"
+#include <avrlit/avrlit.h>
 
 char TEST_BUFFER[30] = "initialized from data memory";
 
