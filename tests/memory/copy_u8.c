@@ -1,4 +1,4 @@
-// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @first_tempfile -O0 && avr-sim @first_tempfile -w OUTPUT_VALUE=u8
+// RUN: @cxx @cxxflags -mmcu=atmega328p @file -o @tempfile -O0 && avr-sim @tempfile -w OUTPUT_VALUE=u8
 
 #include <avrlit/avrlit.h>
 

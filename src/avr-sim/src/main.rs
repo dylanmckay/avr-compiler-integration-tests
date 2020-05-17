@@ -4,6 +4,7 @@ extern crate simavr_sys as simavr;
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;
 
+use byteorder::ByteOrder as _;
 use clap::{App, Arg};
 use std::fmt::Debug;
 use std::io::prelude::*;
@@ -11,6 +12,8 @@ use std::io::{self, stderr};
 use std::{env, process, collections::BTreeMap};
 
 const DEFAULT_GDB_PORT: u16 = 1234;
+
+type ByteOrder = byteorder::LittleEndian;
 
 fn open_firmware(executable_path: Option<&std::path::Path>) -> Result<(sim::Firmware, Vec<u8>), io::Error> {
     // See if a path was specified on the command line.
@@ -60,7 +63,8 @@ pub enum Watch {
 pub enum DataType {
     Char,
     NullTerminated(Box<DataType>),
-    U8,
+    U8, U16, U32, U64, U128,
+    I8, I16, I32, I64, I128,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -206,7 +210,8 @@ fn parse_watchable_symbols_from_elf(elf_data: &[u8], avr: &sim::Avr) -> Vec<Watc
 }
 
 fn main() {
-    let command_line = self::parse_cmd_line();
+    let original_command_line = self::parse_cmd_line();
+    let mut command_line = original_command_line.clone();
 
     let mut avr = sim::Avr::with_name("atmega328").unwrap();
 
@@ -215,8 +220,9 @@ fn main() {
     avr.flash(&firmware);
     sim::uart::attach_to_stdout(&mut avr);
 
-    // NOTE: this should happen after the AVR program is flashed.
+    // NOTE: this always needs to happen after the AVR program is flashed.
     let watchable_symbols = parse_watchable_symbols_from_elf(&firmware_buffer, &avr);
+    print_warnings_for_unresolved_watches(&mut command_line, &watchable_symbols);
 
     if let Some(gdb_port) = command_line.gdb_server_port {
         avr.raw_mut().gdb_port = gdb_port as i32;
@@ -354,6 +360,43 @@ fn dump_value(label: &str,
     }
 }
 
+fn print_warnings_for_unresolved_watches(
+    command_line: &mut CommandLine,
+    watchable_symbols: &[WatchableSymbol],
+) {
+    let watchlists = vec![
+        &mut command_line.print_before,
+        &mut command_line.print_after,
+        &mut command_line.print_on_change,
+    ];
+
+    let mut unique_watches = watchlists.iter().flat_map(|w| w.iter()).collect::<Vec<_>>();
+    unique_watches.sort();
+    unique_watches.dedup();
+
+    // Identify and warn about missing watches.
+    let missing_watches = unique_watches.into_iter().filter(|w| {
+        match *w {
+            Watch::Symbol { ref name, .. } => {
+                if let Some(..) = watchable_symbols.iter().find(|s| s.name == *name) {
+                    false
+                } else {
+                    eprintln!("the symbol '{}' does not exist in the ELF file, or the ELF file contains no debug information", name);
+                    true
+                }
+            },
+            Watch::MemoryAddress { .. } => false, // technically, we could do range checks here.
+        }
+    }).cloned().collect::<Vec<_>>();
+
+    // Remove missing watches from watchlists so they do not cause errors.
+    for watchlist in watchlists.into_iter() {
+        *watchlist = std::mem::replace(watchlist, Vec::new()).into_iter().filter(|watch| {
+            !missing_watches.contains(&watch)
+        }).collect();
+    }
+}
+
 fn print_heading(heading: &str) {
     println!();
     println!("{}", heading);
@@ -432,8 +475,17 @@ impl DataType {
     }
 
     fn as_str_from_bytes_internal<'b>(&self, bytes: &'b [u8]) -> Result<(String, &'b [u8]), String> {
+        let parse_number = |byte_count: usize, interpret_bytes: fn(&[u8]) -> String| {
+            bytes.get(0..byte_count).ok_or("end of memory".to_string())
+                .map(interpret_bytes)
+                .map(|s| (s, &bytes[byte_count..]))
+        };
+
         match *self {
             DataType::U8 => bytes.get(0).map(ToString::to_string).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::U16 => parse_number(2, |bytes| ByteOrder::read_u16(bytes).to_string()),
+            DataType::U32 => parse_number(4, |bytes| ByteOrder::read_u32(bytes).to_string()),
+            DataType::I32 => parse_number(4, |bytes| ByteOrder::read_i32(bytes).to_string()),
             DataType::Char => bytes.get(0).map(|&b| (b as char).to_string()).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
             DataType::NullTerminated(ref element_type) => {
                 let mut elements: Vec<String> = Vec::new();
@@ -462,6 +514,7 @@ impl DataType {
 
                 Ok((formatted_str, bytes_after_null))
             },
+            ref dt => unimplemented!("data type: {:?}", dt),
         }
     }
 }
@@ -523,7 +576,11 @@ impl std::str::FromStr for DataType {
 
     fn from_str(s: &str) -> Result<Self, String> {
         match s.trim() {
-            "u8" => Ok(DataType::U8),
+            "u8" => Ok(DataType::U8), "i8" => Ok(DataType::I8),
+            "u16" => Ok(DataType::U16), "i16" => Ok(DataType::I16),
+            "u32" => Ok(DataType::U32), "i32" => Ok(DataType::I32),
+            "u64" => Ok(DataType::U64), "i64" => Ok(DataType::I64),
+            "u128" => Ok(DataType::U128), "i128" => Ok(DataType::I128),
             "char" => Ok(DataType::Char),
             s => {
                 if let Some(inner) = util::try_consume("null_terminated", s) {
@@ -595,6 +652,12 @@ mod test {
             address: Pointer { address: 1, natural_radix: 16 },
             data_type: DataType::NullTerminated(Box::new(DataType::Char)),
         }), "datamem=0x01=null_terminated=char".parse());
+
+        assert_eq!(Ok(Watch::MemoryAddress {
+            space: MemorySpace::Data,
+            address: Pointer { address: 77, natural_radix: 16 },
+            data_type: DataType::I32(Box::new(DataType::Char)),
+        }), "datamem=77=i32".parse());
     }
 
     #[test]
