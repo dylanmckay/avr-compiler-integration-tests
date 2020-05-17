@@ -72,7 +72,8 @@ Uses the [lit](https://crates.io/crates/lit) crate.
 
 # Coverage
 
-  * Basic copying of immediates to SRAM
+  * Basic copying of immediate integer values to SRAM
+  * Memory copying from one chunk of RAM to another chunk
 
 # Tests yet to be implemented
 
