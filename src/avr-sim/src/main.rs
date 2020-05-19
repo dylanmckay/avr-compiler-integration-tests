@@ -3,6 +3,7 @@ extern crate simavr_sys as simavr;
 
 /// A high level wrapper over `simavr-sys`.
 pub mod sim;
+mod avr_print;
 
 use byteorder::ByteOrder as _;
 use clap::{App, Arg};
@@ -224,6 +225,14 @@ fn main() {
     let watchable_symbols = parse_watchable_symbols_from_elf(&firmware_buffer, &avr);
     print_warnings_for_unresolved_watches(&mut command_line, &watchable_symbols);
 
+    let print_config = match avr_print::Config::new(&watchable_symbols) {
+        Ok(config) => Some(config),
+        Err(message) => {
+            eprintln!("warning: cannot intercept and print the libavrlit debug stream: {}.", message);
+            None
+        },
+    };
+
     if let Some(gdb_port) = command_line.gdb_server_port {
         avr.raw_mut().gdb_port = gdb_port as i32;
         avr.raw_mut().state = simavr_sys::cpu_Stopped as _;
@@ -253,6 +262,12 @@ fn main() {
         let current_cycle_number = avr.raw().run_cycle_count;
 
         let sim_state =  avr.run_cycle();
+
+        if let Some(print_config) = print_config.as_ref() {
+            if let Some(c) = print_config.consume_character(&avr).expect("could not read from libavrlit debug stream") {
+                print!("{}", c);
+            }
+        }
 
         dump_onchanged_watches(&mut prior_values_watched_onchange, &command_line, &watchable_symbols, &avr, current_cycle_number);
 
@@ -424,19 +439,21 @@ impl Watch {
         avr: &sim::Avr,
         watchable_symbols: &[WatchableSymbol],
     ) -> Result<String, String> {
-        match *self {
+        let (bytes, data_type) = match *self {
             Watch::MemoryAddress { space, address, ref data_type } => {
-                self::read_current_memory_address(space, address, data_type, avr)
+                (self::read_current_memory_address(space, address, avr)?, data_type)
             },
             Watch::Symbol { ref name, ref data_type } => {
                 match watchable_symbols.iter().find(|s| s.name == *name) {
                     Some(WatchableSymbol { memory_space, address, .. }) => {
-                        self::read_current_memory_address(*memory_space, address.clone(), data_type, avr)
+                        (self::read_current_memory_address(*memory_space, address.clone(), avr)?, data_type)
                     },
-                    None => Err(format!("the symbol '{}' does not exist in the ELF file, or the ELF file contains no debug information", name)),
+                    None => return Err(format!("the symbol '{}' does not exist in the ELF file, or the ELF file contains no debug information", name)),
                 }
             },
-        }
+        };
+
+        data_type.as_str_from_bytes(bytes)
     }
 
     fn location(&self) -> String {
@@ -447,13 +464,32 @@ impl Watch {
     }
 }
 
-fn read_current_memory_address(
+/// Gets an immutable byte slice starting at the specified AVR memory address.
+fn read_current_memory_address<'avr>(
     space: MemorySpace,
     address: Pointer,
-    data_type: &DataType,
-    avr: &sim::Avr,
-) -> Result<String, String> {
-    let (memory_space_start_host_ptr, memory_space_size) = match space {
+    avr: &'avr sim::Avr,
+) -> Result<&'avr [u8], String> {
+    let (memory_space_start_host_ptr, memory_space_size) = memory_space_slice_parts(space, avr);
+    let memory_space_byte_slice = unsafe { std::slice::from_raw_parts(memory_space_start_host_ptr, memory_space_size) };
+
+    Ok(&memory_space_byte_slice[address.address as usize..])
+}
+
+/// Gets a mutable byte slice starting at the specified AVR memory address.
+fn read_current_memory_address_mut<'avr>(
+    space: MemorySpace,
+    address: Pointer,
+    avr: &'avr sim::Avr,
+) -> Result<&'avr mut [u8], String> {
+    let (memory_space_start_host_ptr, memory_space_size) = memory_space_slice_parts(space, avr);
+    let memory_space_byte_slice = unsafe { std::slice::from_raw_parts_mut(memory_space_start_host_ptr as *mut _, memory_space_size) };
+
+    Ok(&mut memory_space_byte_slice[address.address as usize..])
+}
+
+fn memory_space_slice_parts<'avr>(space: MemorySpace, avr: &'avr sim::Avr) -> (*const u8, usize) {
+    match space {
         MemorySpace::Data => {
             let (data_space_start, data_space_size) = unsafe {
                 ((*avr.underlying()).data as *const u8, (*avr.underlying()).ramend as usize) // N.B. 'ramend' really is the size. misnomer.
@@ -462,12 +498,9 @@ fn read_current_memory_address(
             (data_space_start, data_space_size)
         },
         MemorySpace::Program => unimplemented!("watches on program space"),
-    };
-
-    let memory_space_byte_slice = unsafe { std::slice::from_raw_parts(memory_space_start_host_ptr, memory_space_size) };
-
-    data_type.as_str_from_bytes(&memory_space_byte_slice[address.address as usize..])
+    }
 }
+
 
 impl DataType {
     pub fn as_str_from_bytes(&self, bytes: &[u8]) -> Result<String, String> {
