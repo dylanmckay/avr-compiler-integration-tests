@@ -7,10 +7,10 @@ if [ -z "$LLVM_SYSROOT" ]; then echo "please set \$LLVM_SYSROOT" && exit 1; fi
 set -e
 
 # Build all executables so we can use them from the tests.
-cargo build --quiet
+cargo build
 
 # Run internal Rust tests
-cargo check --quiet
+cargo check
 
 # Run the integration tests with avr-gcc.
 # We expect this to always pass. If this fails, something is likely
