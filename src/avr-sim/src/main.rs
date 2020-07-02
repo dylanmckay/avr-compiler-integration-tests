@@ -1,8 +1,6 @@
-extern crate simavr_sys as simavr;
+extern crate simavr_sim as simavr;
 #[macro_use] extern crate bitflags;
 
-/// A high level wrapper over `simavr-sys`.
-pub mod sim;
 mod avr_print;
 
 use byteorder::ByteOrder as _;
@@ -16,18 +14,18 @@ const DEFAULT_GDB_PORT: u16 = 1234;
 
 type ByteOrder = byteorder::LittleEndian;
 
-fn open_firmware(executable_path: Option<&std::path::Path>) -> Result<(sim::Firmware, Vec<u8>), io::Error> {
+fn open_firmware(executable_path: Option<&std::path::Path>) -> Result<(simavr::Firmware, Vec<u8>), io::Error> {
     // See if a path was specified on the command line.
     match executable_path {
         Some(path) => {
-            Ok((sim::Firmware::read_elf_via_disk(path).unwrap(), std::fs::read(path).unwrap()))
+            Ok((simavr::Firmware::read_elf_via_disk(path).unwrap(), std::fs::read(path).unwrap()))
         }
         // Assume standard input.
         None => {
             writeln!(stderr(), "note: no firmware path specified, reading from stdin").unwrap();
             let mut buffer = Vec::new();
             io::stdin().read_to_end(&mut buffer)?;
-            Ok((sim::Firmware::read_elf(&buffer).unwrap(), buffer))
+            Ok((simavr::Firmware::read_elf(&buffer).unwrap(), buffer))
         },
     }
 }
@@ -172,7 +170,7 @@ pub struct WatchableSymbol {
 }
 
 // TODO: it should be possible to ask for the list of these from the command line.
-fn parse_watchable_symbols_from_elf(elf_data: &[u8], avr: &sim::Avr) -> Vec<WatchableSymbol> {
+fn parse_watchable_symbols_from_elf(elf_data: &[u8], avr: &simavr::Avr) -> Vec<WatchableSymbol> {
     use object::read::{Object, ObjectSection};
 
     let object = object::read::File::parse(elf_data).unwrap();
@@ -214,12 +212,12 @@ fn main() {
     let original_command_line = self::parse_cmd_line();
     let mut command_line = original_command_line.clone();
 
-    let mut avr = sim::Avr::with_name("atmega328").unwrap();
+    let mut avr = simavr::Avr::new("atmega328").unwrap();
 
     let (firmware, firmware_buffer) = open_firmware(command_line.executable_path.as_ref().map(|p| p as _)).expect("could not open firmware");
 
     avr.flash(&firmware);
-    sim::uart::attach_to_stdout(&mut avr);
+    simavr::uart::attach_to_stdout(&mut avr);
 
     // NOTE: this always needs to happen after the AVR program is flashed.
     let watchable_symbols = parse_watchable_symbols_from_elf(&firmware_buffer, &avr);
@@ -235,9 +233,9 @@ fn main() {
 
     if let Some(gdb_port) = command_line.gdb_server_port {
         avr.raw_mut().gdb_port = gdb_port as i32;
-        avr.raw_mut().state = simavr_sys::cpu_Stopped as _;
+        avr.raw_mut().state = simavr::sys::cpu_Stopped as _;
 
-        unsafe { simavr_sys::avr_gdb_init(avr.raw_mut()); }
+        unsafe { simavr::sys::avr_gdb_init(avr.raw_mut()); }
 
         println!("GDB server enabled on port {}", gdb_port);
         println!("NOTE: the MCU will be started in a paused state such that you must continue the initial execution in a debugger");
@@ -272,8 +270,8 @@ fn main() {
         dump_onchanged_watches(&mut prior_values_watched_onchange, &command_line, &watchable_symbols, &avr, current_cycle_number);
 
         match sim_state {
-            sim::State::Running | sim::State::Stopped => (),
-            sim::State::Crashed => {
+            simavr::State::Running | simavr::State::Stopped => (),
+            simavr::State::Crashed => {
                 writeln!(stderr(), "simulation crashed").unwrap();
                 process::exit(1);
             },
@@ -293,7 +291,7 @@ fn dump_onchanged_watches(
     prior_values_watched_onchange: &mut BTreeMap<Watch, String>,
     command_line: &CommandLine,
     watchable_symbols: &[WatchableSymbol],
-    avr: &sim::Avr,
+    avr: &simavr::Avr,
     current_cycle_number: u64,
 ) {
     let changed_watches = {
@@ -332,7 +330,7 @@ fn get_changed_watches(before: &BTreeMap<Watch, String>, after: &BTreeMap<Watch,
 fn dump_values(label: &str,
                watches: &[Watch],
                watchable_symbols: &[WatchableSymbol],
-               avr: &sim::Avr) {
+               avr: &simavr::Avr) {
     if !watches.is_empty() {
         print_heading(&format!("Dumping all {}", label.replace("_", " ")));
 
@@ -343,7 +341,7 @@ fn dump_values(label: &str,
 }
 
 /// Gets the current values of the given watches.
-fn get_current_values(watches: &[Watch], watchable_symbols: &[WatchableSymbol], avr: &sim::Avr) -> BTreeMap<Watch, String> {
+fn get_current_values(watches: &[Watch], watchable_symbols: &[WatchableSymbol], avr: &simavr::Avr) -> BTreeMap<Watch, String> {
     watches.iter().flat_map(|watch| {
         warn_on_error(&format!("get {:?}", watch), || watch.current_value_as_str(&avr, watchable_symbols)).map(|value| (watch.clone(), value))
     }).collect()
@@ -352,7 +350,7 @@ fn get_current_values(watches: &[Watch], watchable_symbols: &[WatchableSymbol], 
 fn dump_watch(label: &str,
               watch: &Watch,
               watchable_symbols: &[WatchableSymbol],
-              avr: &sim::Avr) {
+              avr: &simavr::Avr) {
     let current_value = warn_on_error(&format!("get {:?}", watch), || watch.current_value_as_str(&avr, watchable_symbols));
 
     if let Some(current_value) = current_value {
@@ -436,7 +434,7 @@ fn warn_on_error<T, E>(what_we_are_doing: &str, f: impl FnOnce() -> Result<T, E>
 
 impl Watch {
     fn current_value_as_str(&self,
-        avr: &sim::Avr,
+        avr: &simavr::Avr,
         watchable_symbols: &[WatchableSymbol],
     ) -> Result<String, String> {
         let (bytes, data_type) = match *self {
@@ -468,7 +466,7 @@ impl Watch {
 fn read_current_memory_address<'avr>(
     space: MemorySpace,
     address: Pointer,
-    avr: &'avr sim::Avr,
+    avr: &'avr simavr::Avr,
 ) -> Result<&'avr [u8], String> {
     let (memory_space_start_host_ptr, memory_space_size) = memory_space_slice_parts(space, avr);
     let memory_space_byte_slice = unsafe { std::slice::from_raw_parts(memory_space_start_host_ptr, memory_space_size) };
@@ -480,7 +478,7 @@ fn read_current_memory_address<'avr>(
 fn read_current_memory_address_mut<'avr>(
     space: MemorySpace,
     address: Pointer,
-    avr: &'avr sim::Avr,
+    avr: &'avr simavr::Avr,
 ) -> Result<&'avr mut [u8], String> {
     let (memory_space_start_host_ptr, memory_space_size) = memory_space_slice_parts(space, avr);
     let memory_space_byte_slice = unsafe { std::slice::from_raw_parts_mut(memory_space_start_host_ptr as *mut _, memory_space_size) };
@@ -488,7 +486,7 @@ fn read_current_memory_address_mut<'avr>(
     Ok(&mut memory_space_byte_slice[address.address as usize..])
 }
 
-fn memory_space_slice_parts<'avr>(space: MemorySpace, avr: &'avr sim::Avr) -> (*const u8, usize) {
+fn memory_space_slice_parts<'avr>(space: MemorySpace, avr: &'avr simavr::Avr) -> (*const u8, usize) {
     match space {
         MemorySpace::Data => {
             let (data_space_start, data_space_size) = unsafe {
@@ -693,9 +691,9 @@ mod test {
 
         assert_eq!(Ok(Watch::MemoryAddress {
             space: MemorySpace::Data,
-            address: Pointer { address: 77, natural_radix: 16 },
-            data_type: DataType::I32(Box::new(DataType::Char)),
-        }), "datamem=77=i32".parse());
+            address: Pointer { address: 0x77, natural_radix: 16 },
+            data_type: DataType::I32,
+        }), "datamem=0x77=i32".parse());
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use crate::{
     MemorySpace, WatchableSymbol,
-    sim, read_current_memory_address, read_current_memory_address_mut,
+    read_current_memory_address, read_current_memory_address_mut,
 };
 
 mod libavrlit_symbol_names {
@@ -35,11 +35,11 @@ impl Config {
         Ok(Config { symbol_for_send_buffer, symbol_for_send_buffer_flags })
     }
 
-    pub fn consume_character(&self, avr: &sim::Avr) -> Result<Option<char>, String> {
+    pub fn consume_character(&self, avr: &simavr::Avr) -> Result<Option<char>, String> {
         self.consume_byte(avr).map(|o| o.map(|b| b as char))
     }
 
-    pub fn consume_byte(&self, avr: &sim::Avr) -> Result<Option<u8>, String> {
+    pub fn consume_byte(&self, avr: &simavr::Avr) -> Result<Option<u8>, String> {
         read_current_memory_address(MemorySpace::Data, self.symbol_for_send_buffer_flags.address, avr)?;
 
         let current_flags = self.get_current_flags(avr)?;
@@ -58,28 +58,28 @@ impl Config {
         }
     }
 
-    fn get_current_flags(&self, avr: &sim::Avr) -> Result<WriteBufferFlags, String> {
+    fn get_current_flags(&self, avr: &simavr::Avr) -> Result<WriteBufferFlags, String> {
         read_current_memory_address(MemorySpace::Data, self.symbol_for_send_buffer_flags.address, avr)?
             .get(0)
             .ok_or_else(|| "the debug write buffer flag has no allocated space".to_owned())
             .and_then(|&b| WriteBufferFlags::from_bits(b).ok_or("the debug write buffer flag variable is corrupted".to_string()))
     }
 
-    fn set_current_flags(&self, flags: WriteBufferFlags, avr: &sim::Avr) -> Result<(), String> {
+    fn set_current_flags(&self, flags: WriteBufferFlags, avr: &simavr::Avr) -> Result<(), String> {
         let flag_addr: &mut u8 = read_current_memory_address_mut(MemorySpace::Data, self.symbol_for_send_buffer_flags.address, avr)?
             .get_mut(0).unwrap();
         *flag_addr = flags.bits();
         Ok(())
     }
 
-    fn get_current_write_buffer_value(&self, avr: &sim::Avr) -> Result<u8, String> {
+    fn get_current_write_buffer_value(&self, avr: &simavr::Avr) -> Result<u8, String> {
         read_current_memory_address(MemorySpace::Data, self.symbol_for_send_buffer.address, avr)?
             .get(0)
             .cloned()
             .ok_or_else(|| "the debug write buffer has no allocated space".to_owned())
     }
 
-    fn set_current_write_buffer_value(&self, new_value: u8, avr: &sim::Avr) -> Result<(), String> {
+    fn set_current_write_buffer_value(&self, new_value: u8, avr: &simavr::Avr) -> Result<(), String> {
         let buffer_addr: &mut u8 = read_current_memory_address_mut(MemorySpace::Data, self.symbol_for_send_buffer.address, avr)?
             .get_mut(0).unwrap();
         *buffer_addr = new_value;
