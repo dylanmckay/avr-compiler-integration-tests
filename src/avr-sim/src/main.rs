@@ -56,6 +56,9 @@ pub enum Watch {
         name: String,
         data_type: DataType,
     },
+    IoPort { port_letter: char, port_index: Option<u8> },
+    IoPin { port_letter: char, port_index: Option<u8> },
+    IoDataDirectionRegister { port_letter: char, port_index: Option<u8> },
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -64,6 +67,8 @@ pub enum DataType {
     NullTerminated(Box<DataType>),
     U8, U16, U32, U64, U128,
     I8, I16, I32, I64, I128,
+    HighLowBit,
+    IoRegisterStatus,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -124,7 +129,7 @@ fn parse_cmd_line() -> CommandLine {
         .get_matches();
 
     let parse_watches = |arg_name: &str| {
-        matches.values_of_lossy(arg_name).unwrap_or_else(|| Vec::new()).into_iter().map(|watch| watch.parse().unwrap()).collect::<Vec<Watch>>()
+        matches.values_of_lossy(arg_name).unwrap_or_else(|| Vec::new()).into_iter().flat_map(|watch| parse_watch(&watch).unwrap()).collect::<Vec<Watch>>()
     };
 
     let print_on_everything = parse_watches("watch");
@@ -288,7 +293,7 @@ fn main() {
 }
 
 fn dump_onchanged_watches(
-    prior_values_watched_onchange: &mut BTreeMap<Watch, String>,
+    prior_values_watched_onchange: &mut BTreeMap<Watch, WatchState>,
     command_line: &CommandLine,
     watchable_symbols: &[WatchableSymbol],
     avr: &simavr::Avr,
@@ -312,8 +317,8 @@ fn dump_onchanged_watches(
 
 }
 
-fn get_changed_watches(before: &BTreeMap<Watch, String>, after: &BTreeMap<Watch, String>)
-    -> BTreeMap<Watch, String> {
+fn get_changed_watches(before: &BTreeMap<Watch, WatchState>, after: &BTreeMap<Watch, WatchState>)
+    -> BTreeMap<Watch, WatchState> {
     assert_eq!(before.len(), after.len());
 
     after.iter().filter_map(|(watch, current_value)| {
@@ -341,9 +346,9 @@ fn dump_values(label: &str,
 }
 
 /// Gets the current values of the given watches.
-fn get_current_values(watches: &[Watch], watchable_symbols: &[WatchableSymbol], avr: &simavr::Avr) -> BTreeMap<Watch, String> {
+fn get_current_values(watches: &[Watch], watchable_symbols: &[WatchableSymbol], avr: &simavr::Avr) -> BTreeMap<Watch, WatchState> {
     watches.iter().flat_map(|watch| {
-        warn_on_error(&format!("get {:?}", watch), || watch.current_value_as_str(&avr, watchable_symbols)).map(|value| (watch.clone(), value))
+        warn_on_error(&format!("get {:?}", watch), || watch.current_value(&avr, watchable_symbols)).map(|value| (watch.clone(), value))
     }).collect()
 }
 
@@ -351,7 +356,7 @@ fn dump_watch(label: &str,
               watch: &Watch,
               watchable_symbols: &[WatchableSymbol],
               avr: &simavr::Avr) {
-    let current_value = warn_on_error(&format!("get {:?}", watch), || watch.current_value_as_str(&avr, watchable_symbols));
+    let current_value = warn_on_error(&format!("get {:?}", watch), || watch.current_value(&avr, watchable_symbols));
 
     if let Some(current_value) = current_value {
         self::dump_value(label, watch, &current_value);
@@ -360,7 +365,8 @@ fn dump_watch(label: &str,
 
 fn dump_value(label: &str,
               watch: &Watch,
-              current_value: &str) {
+              current_value: &WatchState) {
+    let current_value = current_value.to_string();
     let is_multi_line = current_value.lines().count() > 1;
 
     if is_multi_line {
@@ -399,6 +405,9 @@ fn print_warnings_for_unresolved_watches(
                 }
             },
             Watch::MemoryAddress { .. } => false, // technically, we could do range checks here.
+            Watch::IoPort { .. } |
+                Watch::IoPin { .. } |
+                Watch::IoDataDirectionRegister { .. } => false, // technically, we could check that the device supports this port.
         }
     }).cloned().collect::<Vec<_>>();
 
@@ -433,31 +442,59 @@ fn warn_on_error<T, E>(what_we_are_doing: &str, f: impl FnOnce() -> Result<T, E>
 }
 
 impl Watch {
-    fn current_value_as_str(&self,
+    fn current_value(&self,
         avr: &simavr::Avr,
         watchable_symbols: &[WatchableSymbol],
-    ) -> Result<String, String> {
-        let (bytes, data_type) = match *self {
+    ) -> Result<WatchState, String> {
+        fn read_io_port(port_letter: char, port_index: Option<u8>, avr: &simavr::Avr, f: impl FnOnce(IoState) -> u8) -> Result<WatchState, String> {
+            let io_state = read_io_state(port_letter, avr);
+            let relevant_value = f(io_state);
+
+            match port_index {
+                Some(i) => {
+                    let mask = (0b1) << i;
+                    Ok(WatchState::HighLowBit(relevant_value & mask == mask))
+                },
+                None => {
+                    Ok(WatchState::IoRegisterStatus(relevant_value))
+                },
+            }
+        }
+
+        match *self {
             Watch::MemoryAddress { space, address, ref data_type } => {
-                (self::read_current_memory_address(space, address, avr)?, data_type)
+                let bytes = self::read_current_memory_address(space, address, avr)?;
+                data_type.as_watch_state_from_bytes(bytes)
             },
             Watch::Symbol { ref name, ref data_type } => {
-                match watchable_symbols.iter().find(|s| s.name == *name) {
+                let bytes = match watchable_symbols.iter().find(|s| s.name == *name) {
                     Some(WatchableSymbol { memory_space, address, .. }) => {
-                        (self::read_current_memory_address(*memory_space, address.clone(), avr)?, data_type)
+                        self::read_current_memory_address(*memory_space, address.clone(), avr)?
                     },
                     None => return Err(format!("the symbol '{}' does not exist in the ELF file, or the ELF file contains no debug information", name)),
-                }
+                };
+                data_type.as_watch_state_from_bytes(bytes)
             },
-        };
+            Watch::IoPort { port_letter, port_index } => {
+                read_io_port(port_letter, port_index, avr, |s| s.port)
+            },
+            Watch::IoPin { port_letter, port_index } => {
+                read_io_port(port_letter, port_index, avr, |s| s.pin)
+            },
+            Watch::IoDataDirectionRegister { port_letter, port_index } => {
+                read_io_port(port_letter, port_index, avr, |s| s.data_direction_register)
+            },
+        }
 
-        data_type.as_str_from_bytes(bytes)
     }
 
     fn location(&self) -> String {
         match *self {
             Watch::MemoryAddress { ref space, ref address, .. } => format!("{} ({})", address, space.human_label()),
             Watch::Symbol { ref name, .. } => name.to_owned(),
+            Watch::IoPort { port_letter, port_index } => format!("IO PORT{}{}", port_letter, if let Some(i) = port_index { i.to_string() } else { String::new() }),
+            Watch::IoPin { port_letter, port_index } => format!("IO PIN{}{}", port_letter, if let Some(i) = port_index { i.to_string() } else { String::new() }),
+            Watch::IoDataDirectionRegister { port_letter, port_index } => format!("IO DDR{}{}", port_letter, if let Some(i) = port_index { i.to_string() } else { String::new() }),
         }
     }
 }
@@ -472,6 +509,98 @@ fn read_current_memory_address<'avr>(
     let memory_space_byte_slice = unsafe { std::slice::from_raw_parts(memory_space_start_host_ptr, memory_space_size) };
 
     Ok(&memory_space_byte_slice[address.address as usize..])
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WatchState {
+    Char(char),
+    Array(Vec<WatchState>),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    HighLowBit(bool),
+    IoRegisterStatus(u8),
+}
+
+impl std::fmt::Display for WatchState {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            WatchState::Char(c) => std::fmt::Display::fmt(&c, fmt),
+            WatchState::U8(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::U16(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::U32(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::U64(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::U128(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::I8(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::I16(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::I32(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::I64(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::I128(i) => std::fmt::Display::fmt(&i, fmt),
+            WatchState::Array(ref elements) => {
+                let formatted_str = if elements.iter().all(|e| if let WatchState::Char(..) = e { true } else { false }) {
+                    let chars = elements.iter().map(|e| if let WatchState::Char(c) = e { c } else { unreachable!() });
+                    chars.collect()
+                } else {
+                    format!("{:?}", elements)
+                };
+
+                write!(fmt, "{}", formatted_str)
+            },
+            WatchState::HighLowBit(b) => {
+                let label = if b { "HIGH" } else { "LOW" };
+                write!(fmt, "{}", label)
+            },
+            WatchState::IoRegisterStatus(r) => {
+                for i in 0..8 {
+                    let is_set = r & (1<<i) == (1<<i);
+                    write!(fmt, "{}: {}", i, if is_set { "HIGH" } else { " LOW" })?;
+                    write!(fmt, ", ")?;
+                }
+
+                Ok(())
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IoState {
+    port: u8,
+    pin: u8,
+    data_direction_register: u8,
+}
+
+const fn avr_ioctl_def(a: char, b: char, c: char, d: char) -> u32 {
+    ((a as u32) << 24) | ((b as u32) << 16) | ((c as u32) << 8)| ((d as u32))
+}
+
+const fn avr_ioctl_ioport_get_state(port_name: char) -> u32 {
+    avr_ioctl_def('i', 'o', 's', port_name)
+}
+
+fn read_io_state(port_letter: char, avr: &simavr::Avr) -> IoState {
+    let mut state: simavr::sys::avr_ioport_state_t = unsafe { std::mem::zeroed() };
+
+    let result = unsafe {
+        simavr::sys::avr_ioctl(avr.underlying(), avr_ioctl_ioport_get_state(port_letter), &mut state as *mut _ as *mut libc::c_void)
+    };
+
+    if result != 0 {
+        panic!("avr ioctl failed for port '{}'", port_letter);
+    }
+
+    IoState {
+        port: state.port() as u8,
+        pin: state.pin() as u8,
+        data_direction_register: state.ddr() as u8,
+    }
 }
 
 /// Gets a mutable byte slice starting at the specified AVR memory address.
@@ -501,31 +630,31 @@ fn memory_space_slice_parts<'avr>(space: MemorySpace, avr: &'avr simavr::Avr) ->
 
 
 impl DataType {
-    pub fn as_str_from_bytes(&self, bytes: &[u8]) -> Result<String, String> {
-        self.as_str_from_bytes_internal(bytes).map(|(s, _)| s)
+    fn as_watch_state_from_bytes(&self, bytes: &[u8]) -> Result<WatchState, String> {
+        self.as_watch_state_from_bytes_internal(bytes).map(|(s, _)| s)
     }
 
-    fn as_str_from_bytes_internal<'b>(&self, bytes: &'b [u8]) -> Result<(String, &'b [u8]), String> {
-        let parse_number = |byte_count: usize, interpret_bytes: fn(&[u8]) -> String| {
+    fn as_watch_state_from_bytes_internal<'b>(&self, bytes: &'b [u8]) -> Result<(WatchState, &'b [u8]), String> {
+        let parse_number = |byte_count: usize, interpret_bytes: fn(&[u8]) -> WatchState| {
             bytes.get(0..byte_count).ok_or("end of memory".to_string())
                 .map(interpret_bytes)
                 .map(|s| (s, &bytes[byte_count..]))
         };
 
         match *self {
-            DataType::U8 => bytes.get(0).map(ToString::to_string).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
-            DataType::I8 => bytes.get(0).map(|&b| (b as i8).to_string()).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
-            DataType::U16 => parse_number(2, |bytes| ByteOrder::read_u16(bytes).to_string()),
-            DataType::I16 => parse_number(2, |bytes| ByteOrder::read_i16(bytes).to_string()),
-            DataType::U32 => parse_number(4, |bytes| ByteOrder::read_u32(bytes).to_string()),
-            DataType::I32 => parse_number(4, |bytes| ByteOrder::read_i32(bytes).to_string()),
-            DataType::U64 => parse_number(8, |bytes| ByteOrder::read_u64(bytes).to_string()),
-            DataType::I64 => parse_number(8, |bytes| ByteOrder::read_i64(bytes).to_string()),
-            DataType::U128 => parse_number(16, |bytes| ByteOrder::read_u128(bytes).to_string()),
-            DataType::I128 => parse_number(16, |bytes| ByteOrder::read_i128(bytes).to_string()),
-            DataType::Char => bytes.get(0).map(|&b| (b as char).to_string()).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::U8 => bytes.get(0).cloned().map(WatchState::U8).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::I8 => bytes.get(0).map(|&b| WatchState::I8(b as i8)).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::U16 => parse_number(2, |bytes| WatchState::U16(ByteOrder::read_u16(bytes))),
+            DataType::I16 => parse_number(2, |bytes| WatchState::I16(ByteOrder::read_i16(bytes))),
+            DataType::U32 => parse_number(4, |bytes| WatchState::U32(ByteOrder::read_u32(bytes))),
+            DataType::I32 => parse_number(4, |bytes| WatchState::I32(ByteOrder::read_i32(bytes))),
+            DataType::U64 => parse_number(8, |bytes| WatchState::U64(ByteOrder::read_u64(bytes))),
+            DataType::I64 => parse_number(8, |bytes| WatchState::I64(ByteOrder::read_i64(bytes))),
+            DataType::U128 => parse_number(16, |bytes| WatchState::U128(ByteOrder::read_u128(bytes))),
+            DataType::I128 => parse_number(16, |bytes| WatchState::I128(ByteOrder::read_i128(bytes))),
+            DataType::Char => bytes.get(0).map(|&b| WatchState::Char(b as char)).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
             DataType::NullTerminated(ref element_type) => {
-                let mut elements: Vec<String> = Vec::new();
+                let mut elements: Vec<WatchState> = Vec::new();
 
                 let bytes_after_null = if let Some(first_null_index) = bytes.iter().position(|&b| b == 0) {
                     let before_and_including_null = &bytes[0..first_null_index + 1];
@@ -534,7 +663,7 @@ impl DataType {
                     let mut left_to_process = before_and_including_null;
 
                     while left_to_process.len() > 1 { // wait until null empty.
-                        let (element, remaining) = element_type.as_str_from_bytes_internal(left_to_process)?;
+                        let (element, remaining) = element_type.as_watch_state_from_bytes_internal(left_to_process)?;
                         elements.push(element);
                         left_to_process = remaining;
                     }
@@ -544,46 +673,73 @@ impl DataType {
                     &[]
                 };
 
-                let formatted_str = match element_type.as_ref() {
-                    DataType::Char => format!("{:?}", elements.join("")),
-                    _ => format!("{:?}", elements),
-                };
-
-                Ok((formatted_str, bytes_after_null))
+                Ok((WatchState::Array(elements), bytes_after_null))
             },
+            DataType::HighLowBit => bytes.get(0).cloned().map(|b| WatchState::HighLowBit(if b != 0 { true } else { false })).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
+            DataType::IoRegisterStatus => bytes.get(0).cloned().map(WatchState::IoRegisterStatus).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
         }
     }
 }
 
-impl std::str::FromStr for Watch {
-    type Err = String;
+// Parses a watch from a string. one watch may correspond to multiple backend watches.
+fn parse_watch(s: &str) -> Result<Vec<Watch>, String> {
+    let s = s.trim();
 
-    fn from_str(s: &str) -> Result<Self, String> {
-        let s = s.trim();
+    fn io_port_from_str(remaining: &str, f: impl FnOnce(char, Option<u8>) -> Vec<Watch>) -> Result<Vec<Watch>, String> {
+        let equals_char_index = match remaining.find('=') {
+            Some(index) => index,
+            None => return Err(format!("expected IO port to include an equals sign and a data type")),
+        };
+        let specified_port = &remaining[(equals_char_index+1)..];
+        let port_letter = match specified_port.chars().nth(0).map(|mut c| { c.make_ascii_uppercase(); c }) {
+            Some(c) => c,
+            None => return Err(format!("expected IO port to include a port letter and an optional index after the equals sign")),
+        };
+        let port_index: Option<u8> = match specified_port.chars().nth(1) {
+            Some(c) => match c.to_string().parse() {
+                Ok(c) => Some(c),
+                Err(_) => return Err(format!("port index is not an integer")),
+            },
+            None => None,
+        };
 
-        if let Some(remaining) = util::try_consume("datamem", &s) {
-            let mut equals_char_indices = remaining.match_indices('=').map(|(i, _)| i);
+        Ok(f(port_letter, port_index))
+    }
 
-            let (address, data_type): (String, String) = match (equals_char_indices.next(), equals_char_indices.next()) {
-                (None, None) => return Err(format!("expected data memory address to include an address and data type separated by equals signs")),
-                (Some(_), None) => return Err(format!("expected data memory address to include a data type separated by equals sign")),
-                (Some(a), Some(dt)) => (remaining.chars().skip(a + 1).take(dt - a - 1).collect(), remaining.chars().skip(dt + 1).collect()),
-                (None, Some(_)) => unreachable!(),
-            };
+    if let Some(remaining) = util::try_consume("datamem", &s) {
+        let mut equals_char_indices = remaining.match_indices('=').map(|(i, _)| i);
 
-            address.parse().and_then(|address| data_type.parse().map(|dt| (address, dt))).map(|(address, data_type)| {
-                Watch::MemoryAddress { address, data_type, space: MemorySpace::Data }
-            })
-        } else if s.chars().filter(|&c| c == '=').count() >= 1 { // symbol name watchables only have one equals sign
-            let (symbol_name, data_type_str) = s.split_at(s.find("=").unwrap());
-            let data_type_str = &data_type_str[1..];
+        let (address, data_type): (String, String) = match (equals_char_indices.next(), equals_char_indices.next()) {
+            (None, None) => return Err(format!("expected data memory address to include an address and data type separated by equals signs")),
+            (Some(_), None) => return Err(format!("expected data memory address to include a data type separated by equals sign")),
+            (Some(a), Some(dt)) => (remaining.chars().skip(a + 1).take(dt - a - 1).collect(), remaining.chars().skip(dt + 1).collect()),
+            (None, Some(_)) => unreachable!(),
+        };
 
-            data_type_str.parse().map(|data_type| {
-                Watch::Symbol { name: symbol_name.to_owned(), data_type }
-            })
-        } else {
-            Err(format!("invalid WATCHABLE: {}", s))
-        }
+        address.parse().and_then(|address| data_type.parse().map(|dt| (address, dt))).map(|(address, data_type)| {
+            vec![Watch::MemoryAddress { address, data_type, space: MemorySpace::Data }]
+        })
+    } else if let Some(remaining) = util::try_consume("io-port", &s) {
+        io_port_from_str(remaining, |port_letter, port_index| vec![Watch::IoPort { port_letter, port_index }])
+    } else if let Some(remaining) = util::try_consume("io-pin", &s) {
+        io_port_from_str(remaining, |port_letter, port_index| vec![Watch::IoPin { port_letter, port_index }])
+    } else if let Some(remaining) = util::try_consume("io-ddr", &s) {
+        io_port_from_str(remaining, |port_letter, port_index| vec![Watch::IoDataDirectionRegister { port_letter, port_index }])
+    } else if let Some(remaining) = util::try_consume("io", &s) {
+        io_port_from_str(remaining, |port_letter, port_index| vec![
+            Watch::IoPort { port_letter, port_index },
+            Watch::IoPin { port_letter, port_index },
+            Watch::IoDataDirectionRegister { port_letter, port_index },
+        ])
+    } else if s.chars().filter(|&c| c == '=').count() >= 1 { // symbol name watchables only have one equals sign
+        let (symbol_name, data_type_str) = s.split_at(s.find("=").unwrap());
+        let data_type_str = &data_type_str[1..];
+
+        data_type_str.parse().map(|data_type| {
+            vec![Watch::Symbol { name: symbol_name.to_owned(), data_type }]
+        })
+    } else {
+        Err(format!("invalid WATCHABLE: {}", s))
     }
 }
 
@@ -671,36 +827,61 @@ mod test {
 
     #[test]
     fn can_parse_data_memory_address() {
-        assert_eq!(Ok(Watch::MemoryAddress {
+        assert_eq!(Ok(vec![Watch::MemoryAddress {
             space: MemorySpace::Data,
             address: Pointer { address: 999, natural_radix: 10 },
             data_type: DataType::U8,
-        }), "datamem=999=u8".parse());
+        }]), parse_watch("datamem=999=u8"));
 
-        assert_eq!(Ok(Watch::MemoryAddress {
+        assert_eq!(Ok(vec![Watch::MemoryAddress {
             space: MemorySpace::Data,
             address: Pointer { address: 999, natural_radix: 10 },
             data_type: DataType::Char,
-        }), "datamem=999=char".parse());
+        }]), parse_watch("datamem=999=char"));
 
-        assert_eq!(Ok(Watch::MemoryAddress {
+        assert_eq!(Ok(vec![Watch::MemoryAddress {
             space: MemorySpace::Data,
             address: Pointer { address: 1, natural_radix: 16 },
             data_type: DataType::NullTerminated(Box::new(DataType::Char)),
-        }), "datamem=0x01=null_terminated=char".parse());
+        }]), parse_watch("datamem=0x01=null_terminated=char"));
 
-        assert_eq!(Ok(Watch::MemoryAddress {
+        assert_eq!(Ok(vec![Watch::MemoryAddress {
             space: MemorySpace::Data,
             address: Pointer { address: 0x77, natural_radix: 16 },
             data_type: DataType::I32,
-        }), "datamem=0x77=i32".parse());
+        }]), parse_watch("datamem=0x77=i32"));
     }
 
     #[test]
     fn can_parse_watchable_symbol() {
-        assert_eq!(Ok(Watch::Symbol {
+        assert_eq!(Ok(vec![Watch::Symbol {
             name: "TEST_BUFFER".to_owned(),
             data_type: DataType::U8,
-        }), "TEST_BUFFER=u8".parse());
+        }]), parse_watch("TEST_BUFFER=u8"));
+    }
+
+    #[test]
+    fn can_parse_watchable_io_port() {
+        assert_eq!(Ok(vec![Watch::IoPort {
+            port_letter: 'A',
+            port_index: None,
+        }]), parse_watch("io-port=a"));
+        assert_eq!(Ok(vec![Watch::IoPort {
+            port_letter: 'D',
+            port_index: Some(3),
+        }]), parse_watch("io-port=D3"));
+        assert_eq!(Ok(vec![Watch::IoPin {
+            port_letter: 'E',
+            port_index: None,
+        }]), parse_watch("io-pin=E"));
+        assert_eq!(Ok(vec![Watch::IoDataDirectionRegister {
+            port_letter: 'A',
+            port_index: Some(0),
+        }]), parse_watch("io-ddr=A0"));
+        assert_eq!(Ok(vec![
+            Watch::IoPort { port_letter: 'D', port_index: Some(7) },
+            Watch::IoPin { port_letter: 'D', port_index: Some(7) },
+            Watch::IoDataDirectionRegister { port_letter: 'D', port_index: Some(7) },
+        ]), parse_watch("io=D7"));
     }
 }

@@ -12,15 +12,41 @@ Extended Help
 
       Example:
 
-        WATCHABLE = "datamem=0x50=null_terminated=char"
+        READ STRING FROM DATA MEMORY AT SPECIFIED POINTER BY ADDRESS:
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-          A null terminated C string starting at RAM address 0x50.
+            WATCHABLE = "datamem=0x50=null_terminated=char"
 
-        WATCHABLE = "TEST_BUFFER=null_terminated=char"
+              A null terminated C string starting at RAM address 0x50.
 
-          A null terminated C string stored in the ELF symbol 'TEST_BUFFER'.
-          The address of the variable will be resolved automatically by the
-          simulator if debug info is included in the ELF.
+        READ STRING FROM DATA MEMORY BY DEBUG SYMBOL NAME:
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+            WATCHABLE = "TEST_BUFFER=null_terminated=char"
+
+              A null terminated C string stored in the ELF symbol 'TEST_BUFFER'.
+              The address of the variable will be resolved automatically by the
+              simulator if debug info is included in the ELF.
+
+        WATCH IO REGISTERS:
+        ~~~~~~~~~~~~~~~~~~~
+
+            Options:
+              WATCHABLE = "<io|io-port|io-pin|io-ddr>=<LETTER>[INDEX]"
+
+            Examples:
+
+              WATCHABLE = "io=B"
+                Watch all changes on DDRB, PORTB, PINB IO registers.
+
+              WATCHABLE = "io=B3"
+                Watch all changes on DDRB, PORTB, PINB IO registers, but only on register index 3.
+
+              WATCHABLE = "io-ddr=B"
+                Watch all changes on DDRB.
+
+              WATCHABLE = "io-pin=B2"
+                Watch all changes on PORTB index 2.
 
   ========
   EXAMPLES
