@@ -514,7 +514,7 @@ fn read_current_memory_address<'avr>(
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WatchState {
     Char(char),
-    Array(Vec<WatchState>),
+    Array { elements: Vec<WatchState>, data_type: DataType },
     U8(u8),
     U16(u16),
     U32(u32),
@@ -543,10 +543,10 @@ impl std::fmt::Display for WatchState {
             WatchState::I32(i) => std::fmt::Display::fmt(&i, fmt),
             WatchState::I64(i) => std::fmt::Display::fmt(&i, fmt),
             WatchState::I128(i) => std::fmt::Display::fmt(&i, fmt),
-            WatchState::Array(ref elements) => {
-                let formatted_str = if elements.iter().all(|e| if let WatchState::Char(..) = e { true } else { false }) {
+            WatchState::Array { ref elements, ref data_type } => {
+                let formatted_str = if *data_type == DataType::Char {
                     let chars = elements.iter().map(|e| if let WatchState::Char(c) = e { c } else { unreachable!() });
-                    chars.collect()
+                    format!("{:?}", chars.collect::<String>())
                 } else {
                     format!("{:?}", elements)
                 };
@@ -673,7 +673,7 @@ impl DataType {
                     &[]
                 };
 
-                Ok((WatchState::Array(elements), bytes_after_null))
+                Ok((WatchState::Array { elements, data_type: *element_type.clone() }, bytes_after_null))
             },
             DataType::HighLowBit => bytes.get(0).cloned().map(|b| WatchState::HighLowBit(if b != 0 { true } else { false })).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
             DataType::IoRegisterStatus => bytes.get(0).cloned().map(WatchState::IoRegisterStatus).ok_or("end of memory".to_string()).map(|s| (s, &bytes[1..])),
