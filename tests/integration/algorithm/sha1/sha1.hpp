@@ -41,7 +41,7 @@ namespace sha1
 			return (value << count) ^ (value >> (32-count));
 		}
 		SHA1(){ reset(); }
-		virtual ~SHA1() {}
+		~SHA1() {}
 		SHA1(const SHA1& s) { *this = s; }
 		const SHA1& operator = (const SHA1& s) {
 			memcpy(m_digest, s.m_digest, 5 * sizeof(uint32_t));
@@ -193,7 +193,7 @@ namespace sha1
 		}
 	private:
 		digest32_t m_digest;
-		uint8_t m_block[64];
+		uint32_t m_block[64];
 		size_t m_blockByteIndex;
 		size_t m_byteCount;
 	};
