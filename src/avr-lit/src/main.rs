@@ -113,6 +113,7 @@ fn all_compiler_flags(other_flags: &[&'static str]) -> Vec<&'static str> {
     let mut flags = vec![
         "-mmcu=atmega328p",
         "-Isrc/libavrlit/include",
+        "-Isrc/libavrlit/include/avrlit/mock_libc",
         "-std=c++11",
         "-ffunction-sections",
         "-g",
