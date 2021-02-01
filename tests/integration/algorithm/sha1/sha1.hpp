@@ -25,6 +25,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
+
+#include <iomanip>
+
+#define size_t uint32_t
+
 namespace sha1
 {
 	class SHA1
@@ -155,7 +160,7 @@ namespace sha1
 			uint32_t d = m_digest[3];
 			uint32_t e = m_digest[4];
 	
-			for (std::size_t i=0; i<80; ++i) {
+			for (size_t i=0; i<80; ++i) {
 				uint32_t f = 0;
 				uint32_t k = 0;
 	
@@ -193,5 +198,8 @@ namespace sha1
 		size_t m_byteCount;
 	};
 }
+
+#undef size_t
+
 #endif
 
